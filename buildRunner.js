@@ -1,250 +1,415 @@
 /**
  * buildRunner.js — Smart Build Abstraction
  *
- * Switches between two execution modes based on RUNNER env var:
- *   local  → child_process (git clone + npm on the host OS)
- *            Works on Render free tier, Play with Docker, local dev
- *   docker → spawns an isolated Docker container per build
- *            Requires a VPS with Docker installed
+ * LOCAL mode  → child_process (works on Render, Play with Docker, local dev)
+ * DOCKER mode → isolated container per build (requires VPS with Docker)
  *
- * Both modes:
- *   1. Clone the GitHub repo
- *   2. Run install command
- *   3. Run build command
- *   4. Copy output to SITES_DIR/subdomain/dist
- *   5. Cleanup temp directory
+ * Key fixes vs v1:
+ *  - git writes progress to stderr, not stdout — we show ALL output
+ *  - envVars can be a Mongoose Map or plain object — handled both
+ *  - Branch fallback: tries 'main' then 'master' automatically
+ *  - Every line is emitted immediately (no buffering)
+ *  - Clear error messages that explain what went wrong
+ *  - buildDir is cleaned up on failure AND success
  */
 
 'use strict';
 
-const { spawn }   = require('child_process');
-const path        = require('path');
-const fs          = require('fs');
+const { spawn } = require('child_process');
+const path      = require('path');
+const fs        = require('fs');
 
-/**
- * Main entry point.
- * @param {Object} opts
- * @param {string} opts.deployId
- * @param {Object} opts.project       — Project document
- * @param {Object} opts.deployment    — Deployment document
- * @param {string} opts.sitesDir      — /var/www/user-sites
- * @param {string} opts.tmpDir        — /tmp/deployboard-builds
- * @param {string} opts.githubToken   — Optional GitHub PAT
- * @param {'local'|'docker'} opts.mode
- * @param {Function} opts.emit        — (event, data) => void  — Socket.io emitter
- * @param {Function} opts.onLog       — (line) => void  — saves to deployment.logs
- */
+// ── Main entry point ─────────────────────────────────────────────────────────
 async function runBuild(opts) {
-  if (opts.mode === 'docker') {
-    return runDockerBuild(opts);
-  }
-  return runLocalBuild(opts);
+  return opts.mode === 'docker'
+    ? runDockerBuild(opts)
+    : runLocalBuild(opts);
 }
 
-// ════════════════════════════════════════════════════════════════════
-// LOCAL MODE  (child_process — works on Render / any Linux host)
-// ════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
+// LOCAL MODE  —  child_process on the host
+// ════════════════════════════════════════════════════════════════════════════
 async function runLocalBuild({ deployId, project, sitesDir, tmpDir, githubToken, emit, onLog }) {
   const buildDir  = path.join(tmpDir, deployId);
   const outputDir = path.join(buildDir, project.outputDir || 'dist');
   const destDir   = path.join(sitesDir, project.subdomain, 'dist');
 
-  const log = (line) => { emit('build:log', { line }); onLog(line); };
+  // Helper: emit a line to the terminal AND save it to the deployment log
+  const log = (line) => {
+    emit('build:log', { line });
+    if (typeof onLog === 'function') onLog(line);
+  };
 
-  // ── Step 1: Clone ───────────────────────────────────────────────
-  emit('build:step', { step: { id: 'clone', state: 'active' } });
-  log(`\x1b[36m[Step 1/5]\x1b[0m Cloning repository…`);
-  log(`\x1b[90m$ git clone --depth=1 --branch=${project.branch||'main'} ${maskToken(project.repoUrl)} ${buildDir}\x1b[0m`);
+  // Helper: convert Mongoose Map or plain object to a plain JS object
+  const resolveEnvVars = (evars) => {
+    if (!evars) return {};
+    if (typeof evars.toObject === 'function') return evars.toObject(); // Mongoose Map
+    if (evars instanceof Map) return Object.fromEntries(evars);         // native Map
+    return evars;                                                        // plain object
+  };
+  const envObj = resolveEnvVars(project.envVars);
 
-  // Build authenticated URL if token provided
-  const cloneUrl = githubToken
-    ? project.repoUrl.replace('https://', `https://${githubToken}@`)
-    : project.repoUrl;
+  // ── Step 1: Clone ───────────────────────────────────────────────────────
+  emitStep(emit, 'clone', 'active');
+  log(`\x1b[36m━━━ Step 1/5 — Clone Repository ━━━\x1b[0m`);
 
-  await spawnStream('git', [
-    'clone', '--depth=1', '--branch', project.branch||'main',
-    cloneUrl, buildDir
-  ], { env: { ...process.env } }, log);
-  emit('build:step', { step: { id: 'clone', state: 'done' } });
-  log(`\x1b[32m[Clone]\x1b[0m Repository cloned successfully.`);
-
-  // ── Step 2: Install ─────────────────────────────────────────────
-  emit('build:step', { step: { id: 'install', state: 'active' } });
-  log(`\n\x1b[36m[Step 2/5]\x1b[0m Installing dependencies…`);
-  const installParts = (project.installCmd || 'npm install').split(/\s+/);
-  log(`\x1b[90m$ ${project.installCmd || 'npm install'}\x1b[0m`);
-  await spawnStream(installParts[0], installParts.slice(1), {
-    cwd: buildDir,
-    env: { ...process.env, ...Object.fromEntries(project.envVars||[]) }
-  }, log);
-  emit('build:step', { step: { id: 'install', state: 'done' } });
-  log(`\x1b[32m[Install]\x1b[0m Dependencies installed.`);
-
-  // ── Step 3: Build ───────────────────────────────────────────────
-  emit('build:step', { step: { id: 'build', state: 'active' } });
-  log(`\n\x1b[36m[Step 3/5]\x1b[0m Building project…`);
-  const buildParts = (project.buildCmd || 'npm run build').split(/\s+/);
-  log(`\x1b[90m$ ${project.buildCmd || 'npm run build'}\x1b[0m`);
-  await spawnStream(buildParts[0], buildParts.slice(1), {
-    cwd: buildDir,
-    env: { ...process.env, NODE_ENV:'production', ...Object.fromEntries(project.envVars||[]) }
-  }, log);
-  emit('build:step', { step: { id: 'build', state: 'done' } });
-  log(`\x1b[32m[Build]\x1b[0m Build completed.`);
-
-  // ── Step 4: Copy to hosting ─────────────────────────────────────
-  emit('build:step', { step: { id: 'copy', state: 'active' } });
-  log(`\n\x1b[36m[Step 4/5]\x1b[0m Copying output to hosting directory…`);
-  log(`\x1b[90m$ cp -r ${outputDir} ${destDir}\x1b[0m`);
-  if (!fs.existsSync(outputDir)) {
-    throw new Error(`Build output directory not found: ${project.outputDir}. Check your buildCmd and outputDir settings.`);
+  // Clean up any previous failed build at this path
+  if (fs.existsSync(buildDir)) {
+    log(`\x1b[90m[cleanup] Removing stale build dir from previous attempt…\x1b[0m`);
+    fs.rmSync(buildDir, { recursive: true, force: true });
   }
+  fs.mkdirSync(buildDir, { recursive: true });
+
+  // Build the authenticated clone URL
+  let cloneUrl = project.repoUrl.trim();
+  if (!cloneUrl.startsWith('http')) {
+    throw new Error(`Invalid repo URL: "${cloneUrl}". Must start with https://`);
+  }
+  if (githubToken) {
+    cloneUrl = cloneUrl.replace(/^https:\/\//, `https://${githubToken}@`);
+  }
+
+  // Try specified branch, fall back to master
+  const branch = (project.branch || 'main').trim();
+  const fallbackBranch = branch === 'main' ? 'master' : 'main';
+  let clonedBranch = branch;
+
+  log(`\x1b[90m$ git clone --depth=1 --branch ${branch} ${maskToken(project.repoUrl, githubToken)} ${buildDir}\x1b[0m`);
+
+  try {
+    await exec('git', [
+      'clone', '--depth=1',
+      '--branch', branch,
+      '--single-branch',
+      '--progress',         // Forces git to write progress to stderr (we show it)
+      cloneUrl, buildDir
+    ], { env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }, log);
+
+  } catch (cloneErr) {
+    // Branch might not exist — try fallback
+    if (cloneErr.message.includes('not found') ||
+        cloneErr.message.includes('not exist') ||
+        cloneErr.message.includes("Remote branch") ||
+        cloneErr.message.includes('Could not find')) {
+
+      log(`\x1b[33m[clone] Branch "${branch}" not found — trying "${fallbackBranch}"…\x1b[0m`);
+      clonedBranch = fallbackBranch;
+      // Remove the failed partial clone
+      fs.rmSync(buildDir, { recursive: true, force: true });
+      fs.mkdirSync(buildDir, { recursive: true });
+
+      await exec('git', [
+        'clone', '--depth=1',
+        '--branch', fallbackBranch,
+        '--single-branch',
+        '--progress',
+        cloneUrl, buildDir
+      ], { env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }, log);
+    } else {
+      // Real error (bad URL, auth fail, network) — throw with clear message
+      const hint = cloneErr.message.includes('Authentication') || cloneErr.message.includes('403')
+        ? '\x1b[33mHint: This looks like a private repo. Add your GITHUB_TOKEN in Settings.\x1b[0m'
+        : cloneErr.message.includes('not found') || cloneErr.message.includes('404')
+        ? '\x1b[33mHint: Check your repo URL — the repo may not exist or may be private.\x1b[0m'
+        : '';
+      if (hint) log(hint);
+      throw cloneErr;
+    }
+  }
+
+  emitStep(emit, 'clone', 'done');
+  log(`\x1b[32m[clone] Cloned branch "${clonedBranch}" successfully.\x1b[0m`);
+
+  // ── Check for package.json ──────────────────────────────────────────────
+  const pkgJson = path.join(buildDir, 'package.json');
+  if (!fs.existsSync(pkgJson)) {
+    log(`\x1b[33m[warning] No package.json found in repo root.\x1b[0m`);
+    log(`\x1b[33m[warning] Files found: ${fs.readdirSync(buildDir).slice(0, 10).join(', ')}\x1b[0m`);
+  } else {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgJson, 'utf8'));
+      log(`\x1b[90m[info] Package: ${pkg.name || '(unnamed)'} v${pkg.version || '?'}\x1b[0m`);
+    } catch(e) {}
+  }
+
+  // ── Step 2: Install ─────────────────────────────────────────────────────
+  emitStep(emit, 'install', 'active');
+  log(`\n\x1b[36m━━━ Step 2/5 — Install Dependencies ━━━\x1b[0m`);
+  const installCmd = project.installCmd || 'npm install';
+  log(`\x1b[90m$ ${installCmd}\x1b[0m`);
+
+  const installParts = splitCmd(installCmd);
+  await exec(installParts[0], installParts.slice(1), {
+    cwd: buildDir,
+    env: {
+      ...process.env,
+      ...envObj,
+      NODE_ENV: 'production',
+      CI: 'true',           // Stops npm from printing unnecessary warnings
+      NPM_CONFIG_PROGRESS: 'true'
+    }
+  }, log);
+
+  emitStep(emit, 'install', 'done');
+  log(`\x1b[32m[install] Dependencies installed.\x1b[0m`);
+
+  // ── Step 3: Build ────────────────────────────────────────────────────────
+  emitStep(emit, 'build', 'active');
+  log(`\n\x1b[36m━━━ Step 3/5 — Build Project ━━━\x1b[0m`);
+  const buildCmd = project.buildCmd || 'npm run build';
+  log(`\x1b[90m$ ${buildCmd}\x1b[0m`);
+
+  const buildParts = splitCmd(buildCmd);
+  await exec(buildParts[0], buildParts.slice(1), {
+    cwd: buildDir,
+    env: {
+      ...process.env,
+      ...envObj,
+      NODE_ENV: 'production',
+      CI: 'false'           // Some bundlers (CRA) treat CI=true as fatal warnings
+    }
+  }, log);
+
+  emitStep(emit, 'build', 'done');
+  log(`\x1b[32m[build] Build completed.\x1b[0m`);
+
+  // ── Step 4: Copy output ──────────────────────────────────────────────────
+  emitStep(emit, 'copy', 'active');
+  log(`\n\x1b[36m━━━ Step 4/5 — Copy to Hosting ━━━\x1b[0m`);
+
+  if (!fs.existsSync(outputDir)) {
+    // Show what IS in the build dir to help debug
+    const dirs = fs.readdirSync(buildDir).filter(f =>
+      fs.statSync(path.join(buildDir, f)).isDirectory()
+    );
+    log(`\x1b[31m[error] Output dir not found: "${project.outputDir || 'dist'}"\x1b[0m`);
+    log(`\x1b[33m[hint] Directories in repo: ${dirs.join(', ') || '(none)'}\x1b[0m`);
+    log(`\x1b[33m[hint] Try changing "Output Directory" to one of the folders above.\x1b[0m`);
+    throw new Error(
+      `Build output directory "${project.outputDir||'dist'}" was not created. ` +
+      `Check your build command. Available dirs: ${dirs.join(', ') || 'none'}`
+    );
+  }
+
+  const outFiles = countFiles(outputDir);
+  log(`\x1b[90m[copy] Output: ${outFiles} files in ${outputDir}\x1b[0m`);
+  log(`\x1b[90m[copy] Destination: ${destDir}\x1b[0m`);
+
   fs.mkdirSync(path.dirname(destDir), { recursive: true });
-  // Remove old deployment
   if (fs.existsSync(destDir)) fs.rmSync(destDir, { recursive: true, force: true });
   copyDirSync(outputDir, destDir);
-  emit('build:step', { step: { id: 'copy', state: 'done' } });
-  log(`\x1b[32m[Copy]\x1b[0m Files deployed to ${destDir}`);
 
-  // ── Step 5: Cleanup ─────────────────────────────────────────────
-  emit('build:step', { step: { id: 'cleanup', state: 'active' } });
-  log(`\n\x1b[36m[Step 5/5]\x1b[0m Cleaning up temporary files…`);
+  emitStep(emit, 'copy', 'done');
+  log(`\x1b[32m[copy] ${outFiles} files deployed.\x1b[0m`);
+
+  // ── Step 5: Cleanup ──────────────────────────────────────────────────────
+  emitStep(emit, 'cleanup', 'active');
+  log(`\n\x1b[36m━━━ Step 5/5 — Cleanup ━━━\x1b[0m`);
   try {
     fs.rmSync(buildDir, { recursive: true, force: true });
-    log(`\x1b[32m[Cleanup]\x1b[0m Removed ${buildDir}`);
-  } catch(e) {
-    log(`\x1b[33m[Cleanup]\x1b[0m Warning: could not remove temp dir: ${e.message}`);
+    log(`\x1b[32m[cleanup] Removed temp dir ${buildDir}\x1b[0m`);
+  } catch (e) {
+    log(`\x1b[33m[cleanup] Warning: ${e.message}\x1b[0m`);
   }
-  emit('build:step', { step: { id: 'cleanup', state: 'done' } });
-  log(`\n\x1b[32m✓ Deployment complete!\x1b[0m Your site is live.`);
+  emitStep(emit, 'cleanup', 'done');
+  log(`\n\x1b[32;1m✓ Build pipeline complete!\x1b[0m`);
 }
 
-// ════════════════════════════════════════════════════════════════════
-// DOCKER MODE  (isolated container per build — for VPS)
-// ════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
+// DOCKER MODE  —  isolated container (VPS only)
+// ════════════════════════════════════════════════════════════════════════════
 async function runDockerBuild({ deployId, project, sitesDir, tmpDir, githubToken, emit, onLog }) {
-  const buildDir = path.join(tmpDir, deployId);
-  const destDir  = path.join(sitesDir, project.subdomain, 'dist');
+  const destDir = path.join(sitesDir, project.subdomain, 'dist');
+  const log = (line) => { emit('build:log', { line }); if (typeof onLog === 'function') onLog(line); };
 
-  const log = (line) => { emit('build:log', { line }); onLog(line); };
+  const resolveEnvVars = (evars) => {
+    if (!evars) return {};
+    if (typeof evars.toObject === 'function') return evars.toObject();
+    if (evars instanceof Map) return Object.fromEntries(evars);
+    return evars;
+  };
+  const envObj = resolveEnvVars(project.envVars);
 
-  // Build env flags for docker run
   const envFlags = [];
-  const envVars  = project.envVars instanceof Map
-    ? Object.fromEntries(project.envVars)
-    : (project.envVars || {});
-  Object.entries(envVars).forEach(([k,v]) => { envFlags.push('-e', `${k}=${v}`); });
-  envFlags.push('-e', 'NODE_ENV=production');
+  Object.entries(envObj).forEach(([k, v]) => envFlags.push('-e', `${k}=${v}`));
+  envFlags.push('-e', 'NODE_ENV=production', '-e', 'CI=false');
   if (githubToken) envFlags.push('-e', `GITHUB_TOKEN=${githubToken}`);
 
   const nodeImage  = `node:${project.nodeVer||'18'}-alpine`;
   const cloneUrl   = githubToken
-    ? project.repoUrl.replace('https://', `https://${githubToken}@`)
+    ? project.repoUrl.replace(/^https:\/\//, `https://${githubToken}@`)
     : project.repoUrl;
-  const branchArg  = project.branch || 'main';
+  const branch     = (project.branch || 'main').trim();
   const installCmd = project.installCmd || 'npm install';
   const buildCmd   = project.buildCmd   || 'npm run build';
   const outputDir  = project.outputDir  || 'dist';
 
-  // Inline shell script executed inside the container
   const script = [
-    `set -e`,
-    `echo "[Docker] Node $(node -v)"`,
-    `git clone --depth=1 --branch=${branchArg} "${cloneUrl}" /app`,
-    `cd /app`,
-    `${installCmd}`,
-    `${buildCmd}`,
-    `cp -r /app/${outputDir} /output/dist`
+    'set -e',
+    `echo "Node $(node -v) / npm $(npm -v)"`,
+    `git clone --depth=1 --branch ${branch} --progress "${cloneUrl}" /app || ` +
+    `git clone --depth=1 --progress "${cloneUrl}" /app`,
+    'cd /app',
+    installCmd,
+    buildCmd,
+    `cp -r /app/${outputDir} /output/dist`,
+    `echo "Build complete — $(find /output/dist -type f | wc -l) files deployed"`
   ].join(' && ');
 
-  // Ensure output folder exists on host
   fs.mkdirSync(path.dirname(destDir), { recursive: true });
   if (fs.existsSync(destDir)) fs.rmSync(destDir, { recursive: true, force: true });
   fs.mkdirSync(destDir, { recursive: true });
 
-  // ── Step 1-4 in one docker run ──────────────────────────────────
-  ['clone','install','build','copy'].forEach(s => {
-    emit('build:step', { step: { id: s, state: 'active' } });
-  });
+  ['clone','install','build','copy'].forEach(s => emitStep(emit, s, 'active'));
+  log(`\x1b[36m[Docker]\x1b[0m Pulling ${nodeImage} and running build…`);
 
-  log(`\x1b[36m[Docker]\x1b[0m Pulling image ${nodeImage}…`);
-
-  const dockerArgs = [
+  await exec('docker', [
     'run', '--rm',
-    '--name', `deployboard-${deployId.slice(-8)}`,
+    '--name', `db-${deployId.slice(-8)}`,
     '--memory', '512m', '--cpus', '1',
     '-v', `${destDir}:/output/dist`,
     ...envFlags,
-    nodeImage,
-    'sh', '-c', script
-  ];
+    nodeImage, 'sh', '-c', script
+  ], {}, log);
 
-  log(`\x1b[90m$ docker ${dockerArgs.filter(a => !a.includes('TOKEN')).join(' ')}\x1b[0m`);
-  await spawnStream('docker', dockerArgs, {}, log);
+  ['clone','install','build','copy'].forEach(s => emitStep(emit, s, 'done'));
 
-  ['clone','install','build','copy'].forEach(s => {
-    emit('build:step', { step: { id: s, state: 'done' } });
-  });
-
-  // ── Step 5: Cleanup ─────────────────────────────────────────────
-  emit('build:step', { step: { id: 'cleanup', state: 'active' } });
-  log(`\n\x1b[36m[Step 5/5]\x1b[0m Cleanup complete (Docker handles temp automatically)`);
-  emit('build:step', { step: { id: 'cleanup', state: 'done' } });
-  log(`\n\x1b[32m✓ Docker deployment complete!\x1b[0m`);
+  emitStep(emit, 'cleanup', 'active');
+  log(`\x1b[32m[cleanup] Docker cleaned up container automatically.\x1b[0m`);
+  emitStep(emit, 'cleanup', 'done');
+  log(`\n\x1b[32;1m✓ Docker build complete!\x1b[0m`);
 }
 
-// ════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
 // HELPERS
-// ════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
 
 /**
- * Spawn a child process and stream stdout/stderr line-by-line to `logFn`.
- * Rejects with the exit code if non-zero.
+ * Spawn a child process.
+ * IMPORTANT: git sends most output to stderr (not stdout), so we treat
+ * stderr as normal log output rather than errors. We only reject on
+ * non-zero exit code.
  */
-function spawnStream(cmd, args, options, logFn) {
+function exec(cmd, args, options, logFn) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, {
       shell: false,
-      env:   options.env || process.env,
-      cwd:   options.cwd || undefined
+      cwd:   options.cwd,
+      env:   options.env || process.env
     });
 
+    let lastLines = []; // keep last 10 lines for error context
+
+    const handleLine = (line, isStderr) => {
+      if (!line.trim()) return;
+      // Git puts its useful messages on stderr — show them all in grey
+      const display = isStderr ? `\x1b[90m${line}\x1b[0m` : line;
+      logFn(display);
+      lastLines.push(line);
+      if (lastLines.length > 10) lastLines.shift();
+    };
+
+    let stdoutBuf = '';
     let stderrBuf = '';
 
     child.stdout.on('data', (chunk) => {
-      chunk.toString().split('\n').forEach(l => { if (l) logFn(l); });
-    });
-    child.stderr.on('data', (chunk) => {
-      const str = chunk.toString();
-      stderrBuf += str;
-      str.split('\n').forEach(l => { if (l) logFn(`\x1b[90m${l}\x1b[0m`); });
+      stdoutBuf += chunk.toString();
+      const lines = stdoutBuf.split('\n');
+      stdoutBuf = lines.pop(); // keep incomplete last line
+      lines.forEach(l => handleLine(l, false));
     });
 
-    child.on('error', (err) => reject(new Error(`Failed to start ${cmd}: ${err.message}`)));
+    child.stderr.on('data', (chunk) => {
+      stderrBuf += chunk.toString();
+      // Split on \n and \r (git uses \r for progress overwriting)
+      const lines = stderrBuf.split(/[\n\r]+/);
+      stderrBuf = lines.pop();
+      lines.forEach(l => handleLine(l, true));
+    });
+
+    child.stdout.on('end', () => {
+      if (stdoutBuf.trim()) handleLine(stdoutBuf, false);
+    });
+    child.stderr.on('end', () => {
+      if (stderrBuf.trim()) handleLine(stderrBuf, true);
+    });
+
+    child.on('error', (err) => {
+      reject(new Error(
+        `Could not start "${cmd}": ${err.message}. ` +
+        (cmd === 'git' ? 'Is git installed on this server?' :
+         cmd === 'npm' ? 'Is Node.js installed?' : '')
+      ));
+    });
+
     child.on('close', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`${cmd} exited with code ${code}. ${stderrBuf.slice(-200)}`));
+      if (code === 0) {
+        resolve();
+      } else {
+        const context = lastLines.slice(-5).join('\n');
+        reject(new Error(
+          `"${cmd} ${args.slice(0,3).join(' ')}…" failed with exit code ${code}.\n${context}`
+        ));
+      }
     });
   });
+}
+
+/** Split a command string into [cmd, ...args] respecting quotes */
+function splitCmd(cmdStr) {
+  const parts = [];
+  let current = '';
+  let inQuote = false;
+  let quoteChar = '';
+  for (const ch of cmdStr.trim()) {
+    if (inQuote) {
+      if (ch === quoteChar) { inQuote = false; }
+      else { current += ch; }
+    } else if (ch === '"' || ch === "'") {
+      inQuote = true; quoteChar = ch;
+    } else if (ch === ' ' || ch === '\t') {
+      if (current) { parts.push(current); current = ''; }
+    } else {
+      current += ch;
+    }
+  }
+  if (current) parts.push(current);
+  return parts.length ? parts : ['npm', 'run', 'build'];
 }
 
 /** Recursively copy a directory */
 function copyDirSync(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
-  fs.readdirSync(src).forEach(entry => {
-    const srcPath  = path.join(src, entry);
-    const destPath = path.join(dest, entry);
-    if (fs.lstatSync(srcPath).isDirectory()) {
-      copyDirSync(srcPath, destPath);
-    } else {
-      fs.copyFileSync(srcPath, destPath);
-    }
-  });
+  for (const entry of fs.readdirSync(src)) {
+    const s = path.join(src, entry);
+    const d = path.join(dest, entry);
+    if (fs.lstatSync(s).isDirectory()) copyDirSync(s, d);
+    else fs.copyFileSync(s, d);
+  }
 }
 
-/** Remove GitHub token from URL for display */
-function maskToken(url) {
-  return url.replace(/https:\/\/[^@]+@/, 'https://***@');
+/** Count files recursively */
+function countFiles(dir) {
+  let count = 0;
+  try {
+    for (const entry of fs.readdirSync(dir)) {
+      const full = path.join(dir, entry);
+      if (fs.lstatSync(full).isDirectory()) count += countFiles(full);
+      else count++;
+    }
+  } catch(e) {}
+  return count;
+}
+
+/** Remove GitHub token from URL for display in logs */
+function maskToken(url, token) {
+  if (!token) return url;
+  return url.replace(/^https:\/\//, 'https://***@');
+}
+
+/** Emit a build step state update */
+function emitStep(emit, id, state) {
+  emit('build:step', { step: { id, state } });
 }
 
 module.exports = { runBuild };

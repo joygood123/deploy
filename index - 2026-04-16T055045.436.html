@@ -1,0 +1,4114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>DeployBoard — Ship Anything. Instantly.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Socket.io -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <!-- Xterm.js -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+
+<style>
+
+/* ══════════════════════════════════════════════════════════════════
+   VIEW MODE SWITCHING
+══════════════════════════════════════════════════════════════════ */
+/* Default = landing page mode */
+html, body { overflow-x: hidden; }
+#app { display: none !important; height: 100vh; width: 100vw; overflow: hidden; }
+#landing-view { display: block; }
+
+/* When dashboard is active */
+html.app-mode body { overflow: hidden; }
+html.app-mode #landing-view { display: none !important; }
+html.app-mode #app { display: flex !important; }
+
+
+
+/* ══════════════════════════════════════════════════════════════════
+   LANDING PAGE STYLES
+══════════════════════════════════════════════════════════════════ */
+
+/* ── Tokens ─────────────────────────────────────────────────────── */
+:root {
+  --bg:       #060b14;
+  --bg-2:     #0b1221;
+  --bg-3:     #0f1a2e;
+  --border:   rgba(99,179,237,0.10);
+  --border-h: rgba(99,179,237,0.22);
+  --primary:  #3b82f6;
+  --primary-d:#2563eb;
+  --green:    #10b981;
+  --cyan:     #06b6d4;
+  --purple:   #8b5cf6;
+  --amber:    #f59e0b;
+  --red:      #ef4444;
+  --text:     #e2e8f0;
+  --text-2:   #94a3b8;
+  --text-3:   #475569;
+  --font-ui:  'Outfit', sans-serif;
+  --font-hd:  'Syne', sans-serif;
+  --font-mono:'JetBrains Mono', monospace;
+  --r:        12px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size:16px;line-height:1.6;}
+a{text-decoration:none;color:inherit;}
+button{cursor:pointer;font-family:var(--font-ui);}
+img{max-width:100%;}
+
+/* ── Scrollbar ───────────────────────────────────────────────────── */
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:rgba(99,179,237,0.15);border-radius:99px;}
+
+/* ── Grid noise overlay ──────────────────────────────────────────── */
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:
+    linear-gradient(rgba(99,179,237,0.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(99,179,237,0.025) 1px,transparent 1px);
+  background-size:48px 48px;
+  pointer-events:none;z-index:0;
+}
+
+/* ── NAV ─────────────────────────────────────────────────────────── */
+/* Scoped to #landing-view to prevent bleeding into dashboard */
+#landing-view nav{
+  position:fixed;top:0;left:0;right:0;z-index:900;
+  height:62px;
+  display:flex;align-items:center;
+  padding:0 max(24px,5vw);
+  background:rgba(6,11,20,0.8);
+  backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--border);
+}
+#landing-view .nav-logo{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+#landing-view .nav-logo-mark{
+  width:34px;height:34px;
+  background:linear-gradient(135deg,var(--primary),var(--cyan));
+  border-radius:8px;display:flex;align-items:center;justify-content:center;
+}
+#landing-view .nav-logo-mark svg{width:18px;height:18px;color:#fff;}
+#landing-view .nav-logo-name{font-family:var(--font-hd);font-weight:800;font-size:1.05rem;letter-spacing:-0.02em;}
+#landing-view .nav-badge{
+  font-size:0.5rem;font-weight:700;letter-spacing:0.1em;
+  background:rgba(59,130,246,0.15);color:var(--primary);
+  border:1px solid rgba(59,130,246,0.25);border-radius:4px;
+  padding:2px 5px;text-transform:uppercase;
+}
+#landing-view .nav-links{
+  display:flex;align-items:center;gap:6px;
+  margin:0 auto;
+}
+#landing-view .nav-link{
+  padding:7px 14px;border-radius:8px;
+  font-size:0.85rem;font-weight:500;color:var(--text-2);
+  transition:color 0.15s,background 0.15s;
+}
+#landing-view .nav-link:hover{color:var(--text);background:rgba(255,255,255,0.04);}
+#landing-view .nav-actions{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+#landing-view .btn-nav{
+  padding:8px 18px;border-radius:8px;font-size:0.85rem;font-weight:600;
+  border:1px solid var(--border);color:var(--text-2);background:transparent;
+  transition:all 0.15s;
+}
+#landing-view .btn-nav:hover{border-color:var(--border-h);color:var(--text);background:rgba(255,255,255,0.04);}
+#landing-view .btn-nav-primary{
+  background:var(--primary);border-color:var(--primary);color:#fff;
+}
+#landing-view .btn-nav-primary:hover{background:var(--primary-d);border-color:var(--primary-d);}
+
+@media(max-width:768px){
+  #landing-view .nav-links{display:none;}
+  #landing-view .btn-nav:not(.btn-nav-primary){display:none;}
+  .hero{ padding:90px 18px 50px; }
+  .hero-terminal{ max-width:100%; }
+  .terminal-body{ min-height:160px; font-size:0.7rem; }
+  .how-grid{ grid-template-columns:1fr; gap:32px; }
+  footer{ flex-direction:column; align-items:flex-start; gap:14px; }
+  .footer-links{ gap:12px; }
+  .hero-actions{ flex-direction:column; align-items:stretch; }
+  .hero-actions .btn-hero-primary,
+  .hero-actions .btn-hero-ghost{ justify-content:center; }
+  .hero-h1{ font-size:clamp(1.8rem,8vw,2.4rem); }
+  .hero-typewriter-wrap{ font-size:clamp(1.5rem,7vw,2rem); }
+  .section{ padding:60px 18px; }
+  .how-section{ padding:60px 18px; }
+  .features-grid{ grid-template-columns:1fr; }
+  .section-title{ font-size:clamp(1.4rem,5vw,2rem); }
+  .metrics-bar{ padding:20px 18px; }
+  .metric-item{ min-width:45%; padding:10px 14px; }
+  .cta-section{ padding:60px 18px; }
+  .snippet-grid{ grid-template-columns:1fr; }
+  .how-code-wrap{ overflow-x:auto; }
+  .code-tabs{ overflow-x:auto; }
+  .code-tab{ white-space:nowrap; }
+}
+
+/* ── HERO ────────────────────────────────────────────────────────── */
+.hero{
+  position:relative;
+  min-height:100vh;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:120px max(24px,6vw) 80px;
+  text-align:center;
+  overflow:hidden;
+}
+.hero-glow{
+  position:absolute;top:-200px;left:50%;transform:translateX(-50%);
+  width:900px;height:700px;
+  background:radial-gradient(ellipse at center,rgba(59,130,246,0.15) 0%,rgba(6,182,212,0.05) 40%,transparent 70%);
+  pointer-events:none;
+}
+.hero-glow-2{
+  position:absolute;bottom:-100px;right:-100px;
+  width:500px;height:500px;
+  background:radial-gradient(ellipse at center,rgba(139,92,246,0.08) 0%,transparent 70%);
+  pointer-events:none;
+}
+.hero-eyebrow{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:6px 14px;
+  background:rgba(59,130,246,0.08);
+  border:1px solid rgba(59,130,246,0.2);
+  border-radius:99px;
+  font-size:0.78rem;font-weight:600;color:var(--primary);
+  letter-spacing:0.04em;text-transform:uppercase;
+  margin-bottom:28px;
+  animation:fadeUp 0.6s ease both;
+}
+.hero-eyebrow-dot{width:6px;height:6px;background:var(--primary);border-radius:50%;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+.hero-h1{
+  font-family:var(--font-hd);
+  font-size:clamp(2.4rem,6vw,5rem);
+  font-weight:800;
+  letter-spacing:-0.04em;
+  line-height:1.1;
+  color:var(--text);
+  margin-bottom:16px;
+  animation:fadeUp 0.6s 0.1s ease both;
+}
+.hero-h1 .accent{
+  background:linear-gradient(135deg,var(--primary),var(--cyan));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.hero-typewriter-wrap{
+  font-family:var(--font-hd);
+  font-size:clamp(2rem,5vw,4.2rem);
+  font-weight:800;
+  letter-spacing:-0.04em;
+  line-height:1.1;
+  margin-bottom:32px;
+  height:1.15em;
+  animation:fadeUp 0.6s 0.15s ease both;
+}
+.hero-typewriter{
+  color:transparent;
+  background:linear-gradient(135deg,var(--cyan),var(--green));
+  -webkit-background-clip:text;background-clip:text;
+  border-right:3px solid var(--cyan);
+  white-space:nowrap;overflow:hidden;
+  display:inline-block;
+  animation:blink 0.85s step-end infinite;
+}
+@keyframes blink{0%,100%{border-color:var(--cyan)}50%{border-color:transparent}}
+.hero-sub{
+  max-width:580px;
+  font-size:clamp(1rem,2vw,1.15rem);
+  color:var(--text-2);
+  line-height:1.7;
+  margin-bottom:40px;
+  animation:fadeUp 0.6s 0.2s ease both;
+}
+.hero-actions{
+  display:flex;align-items:center;justify-content:center;gap:12px;
+  flex-wrap:wrap;
+  margin-bottom:64px;
+  animation:fadeUp 0.6s 0.25s ease both;
+}
+.btn-hero-primary{
+  display:inline-flex;align-items:center;gap:9px;
+  padding:13px 26px;border-radius:10px;
+  background:var(--primary);border:1px solid var(--primary);
+  color:#fff;font-size:0.95rem;font-weight:700;
+  transition:all 0.2s;box-shadow:0 0 40px rgba(59,130,246,0.3);
+}
+.btn-hero-primary:hover{background:var(--primary-d);border-color:var(--primary-d);transform:translateY(-1px);box-shadow:0 4px 50px rgba(59,130,246,0.4);}
+.btn-hero-primary svg{width:16px;height:16px;}
+.btn-hero-ghost{
+  display:inline-flex;align-items:center;gap:9px;
+  padding:13px 26px;border-radius:10px;
+  background:transparent;border:1px solid var(--border-h);
+  color:var(--text);font-size:0.95rem;font-weight:600;
+  transition:all 0.2s;
+}
+.btn-hero-ghost:hover{background:rgba(255,255,255,0.04);border-color:var(--border-h);}
+.btn-hero-ghost svg{width:16px;height:16px;color:var(--text-2);}
+
+/* ── Terminal hero ────────────────────────────────────────────────── */
+.hero-terminal{
+  width:100%;max-width:740px;
+  background:var(--bg-2);
+  border:1px solid var(--border-h);
+  border-radius:14px;
+  overflow:hidden;
+  box-shadow:0 40px 100px rgba(0,0,0,0.7),0 0 0 1px rgba(99,179,237,0.05);
+  text-align:left;
+  animation:fadeUp 0.7s 0.35s ease both;
+}
+.terminal-bar{
+  display:flex;align-items:center;gap:7px;
+  padding:12px 16px;
+  border-bottom:1px solid var(--border);
+  background:rgba(15,26,46,0.6);
+}
+.term-dot{width:11px;height:11px;border-radius:50%;}
+.term-dot.r{background:#ef4444;}
+.term-dot.y{background:#f59e0b;}
+.term-dot.g{background:#10b981;}
+.terminal-title{
+  margin-left:auto;margin-right:auto;
+  font-size:0.72rem;font-weight:600;color:var(--text-3);
+  font-family:var(--font-mono);
+}
+.terminal-body{
+  padding:18px 20px;
+  font-family:var(--font-mono);font-size:0.78rem;
+  line-height:1.9;min-height:240px;
+}
+.tl{display:block;}
+.tl-prompt{color:var(--green);}
+.tl-cmd{color:var(--text);}
+.tl-out{color:var(--text-3);}
+.tl-step{color:var(--cyan);}
+.tl-success{color:var(--green);}
+.tl-url{color:var(--primary);text-decoration:underline;}
+.tl-hidden{display:none;}
+.cursor-blink{
+  display:inline-block;width:7px;height:13px;
+  background:var(--green);border-radius:1px;
+  animation:blink 0.85s step-end infinite;vertical-align:middle;
+}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+
+/* ── METRICS BAR ─────────────────────────────────────────────────── */
+.metrics-bar{
+  position:relative;
+  display:flex;align-items:center;justify-content:center;
+  gap:0;flex-wrap:wrap;
+  padding:32px max(24px,6vw);
+  border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+  background:rgba(11,18,33,0.5);
+  overflow:hidden;
+}
+.metric-item{
+  flex:1;min-width:140px;max-width:220px;
+  text-align:center;padding:12px 24px;
+  border-right:1px solid var(--border);
+}
+.metric-item:last-child{border-right:none;}
+.metric-value{
+  font-family:var(--font-hd);font-size:2rem;font-weight:800;
+  letter-spacing:-0.04em;color:var(--text);line-height:1;
+  margin-bottom:4px;
+}
+.metric-value .unit{font-size:1rem;color:var(--text-2);}
+.metric-label{font-size:0.78rem;color:var(--text-3);font-weight:500;}
+
+@media(max-width:600px){
+  .metrics-bar{gap:0;}
+  .metric-item{min-width:50%;border-right:1px solid var(--border);border-bottom:1px solid var(--border);}
+  .metric-item:nth-child(2n){border-right:none;}
+  .metric-item:nth-last-child(-n+2){border-bottom:none;}
+}
+
+/* ── FEATURES ────────────────────────────────────────────────────── */
+.section{
+  padding:96px max(24px,6vw);
+  position:relative;
+}
+.section-label{
+  display:inline-flex;align-items:center;gap:8px;
+  font-size:0.72rem;font-weight:700;letter-spacing:0.12em;
+  text-transform:uppercase;color:var(--primary);
+  margin-bottom:16px;
+}
+.section-label::before{
+  content:'';width:20px;height:2px;background:var(--primary);border-radius:99px;
+}
+.section-title{
+  font-family:var(--font-hd);font-size:clamp(1.8rem,4vw,2.8rem);
+  font-weight:800;letter-spacing:-0.03em;color:var(--text);
+  max-width:560px;line-height:1.2;margin-bottom:14px;
+}
+.section-sub{
+  font-size:1rem;color:var(--text-2);max-width:520px;line-height:1.7;
+  margin-bottom:56px;
+}
+.features-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+  gap:1px;
+  background:var(--border);
+  border:1px solid var(--border);
+  border-radius:16px;overflow:hidden;
+}
+.feature-card{
+  background:var(--bg-2);
+  padding:32px;
+  transition:background 0.2s;
+  position:relative;overflow:hidden;
+}
+.feature-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(59,130,246,0.4),transparent);
+  opacity:0;transition:opacity 0.3s;
+}
+.feature-card:hover{background:var(--bg-3);}
+.feature-card:hover::before{opacity:1;}
+.feature-icon{
+  width:46px;height:46px;border-radius:11px;
+  display:flex;align-items:center;justify-content:center;
+  margin-bottom:20px;
+  border:1px solid;
+}
+.feature-icon svg{width:22px;height:22px;}
+.feature-name{
+  font-family:var(--font-hd);font-size:1rem;font-weight:700;
+  color:var(--text);margin-bottom:8px;
+}
+.feature-desc{font-size:0.875rem;color:var(--text-2);line-height:1.65;}
+.feature-tag{
+  display:inline-block;margin-top:14px;
+  font-size:0.7rem;font-weight:700;letter-spacing:0.06em;
+  padding:3px 9px;border-radius:99px;font-family:var(--font-mono);
+}
+
+/* ── HOW IT WORKS ────────────────────────────────────────────────── */
+.how-section{padding:96px max(24px,6vw);}
+.how-grid{
+  display:grid;grid-template-columns:1fr 1fr;
+  gap:60px;align-items:center;
+}
+@media(max-width:900px){.how-grid{grid-template-columns:1fr;gap:40px;}}
+.how-steps{display:flex;flex-direction:column;gap:28px;}
+.how-step{
+  display:flex;gap:20px;align-items:flex-start;
+  padding:20px;border-radius:12px;
+  border:1px solid transparent;
+  transition:all 0.2s;cursor:pointer;
+}
+.how-step:hover,.how-step.active{
+  background:rgba(59,130,246,0.05);
+  border-color:rgba(59,130,246,0.15);
+}
+.how-step-num{
+  width:36px;height:36px;border-radius:9px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-mono);font-size:0.82rem;font-weight:700;
+  flex-shrink:0;
+  background:rgba(59,130,246,0.1);
+  border:1px solid rgba(59,130,246,0.25);
+  color:var(--primary);
+  transition:all 0.2s;
+}
+.how-step.active .how-step-num{
+  background:var(--primary);color:#fff;border-color:var(--primary);
+}
+.how-step-title{font-weight:700;font-size:0.95rem;color:var(--text);margin-bottom:5px;}
+.how-step-desc{font-size:0.83rem;color:var(--text-2);line-height:1.6;}
+.how-code-wrap{
+  background:var(--bg-2);
+  border:1px solid var(--border-h);border-radius:14px;
+  overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,0.5);
+}
+.code-tabs{
+  display:flex;border-bottom:1px solid var(--border);
+  background:rgba(15,26,46,0.6);
+}
+.code-tab{
+  padding:10px 16px;font-family:var(--font-mono);font-size:0.72rem;
+  color:var(--text-3);cursor:pointer;border-bottom:2px solid transparent;
+  transition:all 0.15s;
+}
+.code-tab.active{color:var(--cyan);border-bottom-color:var(--cyan);}
+.code-panel{display:none;padding:20px;font-family:var(--font-mono);font-size:0.78rem;line-height:1.9;}
+.code-panel.active{display:block;}
+.ck{color:#c084fc;}
+.cs{color:#86efac;}
+.cn{color:#93c5fd;}
+.co{color:#6b7280;}
+.cy{color:var(--cyan);}
+
+/* ── DEPLOY FLOW ─────────────────────────────────────────────────── */
+.flow-section{
+  padding:96px max(24px,6vw);
+  background:linear-gradient(180deg,transparent,rgba(11,18,33,0.5),transparent);
+}
+.flow-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:0;position:relative;margin-top:48px;
+}
+.flow-step{
+  display:flex;flex-direction:column;align-items:center;text-align:center;
+  padding:32px 20px;position:relative;
+}
+.flow-step::after{
+  content:'';position:absolute;top:42px;right:-1px;
+  width:40px;height:2px;
+  background:linear-gradient(90deg,var(--border-h),transparent);
+}
+.flow-step:last-child::after{display:none;}
+.flow-icon{
+  width:56px;height:56px;border-radius:14px;
+  display:flex;align-items:center;justify-content:center;
+  margin-bottom:16px;
+  background:var(--bg-2);border:1px solid var(--border-h);
+  position:relative;
+}
+.flow-icon svg{width:24px;height:24px;}
+.flow-icon-badge{
+  position:absolute;top:-8px;right:-8px;
+  width:20px;height:20px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:0.6rem;font-weight:700;font-family:var(--font-mono);
+  border:2px solid var(--bg);
+}
+.flow-step-title{font-weight:700;font-size:0.9rem;color:var(--text);margin-bottom:6px;}
+.flow-step-desc{font-size:0.78rem;color:var(--text-2);line-height:1.5;max-width:180px;}
+
+@media(max-width:700px){
+  .flow-grid{grid-template-columns:1fr 1fr;}
+  .flow-step::after{display:none;}
+}
+@media(max-width:400px){.flow-grid{grid-template-columns:1fr;}}
+
+/* ── NGINX SNIPPET ───────────────────────────────────────────────── */
+.snippet-section{padding:96px max(24px,6vw);}
+.snippet-grid{
+  display:grid;grid-template-columns:1fr 1fr;
+  gap:24px;margin-top:48px;
+}
+@media(max-width:900px){.snippet-grid{grid-template-columns:1fr;}}
+.snippet-card{
+  background:var(--bg-2);border:1px solid var(--border);
+  border-radius:14px;overflow:hidden;
+  transition:border-color 0.2s;
+}
+.snippet-card:hover{border-color:var(--border-h);}
+.snippet-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-bottom:1px solid var(--border);
+  background:rgba(15,26,46,0.4);
+}
+.snippet-lang{
+  font-family:var(--font-mono);font-size:0.7rem;font-weight:700;
+  padding:3px 9px;border-radius:6px;
+}
+.snippet-copy{
+  font-size:0.72rem;color:var(--text-3);background:transparent;
+  border:1px solid var(--border);border-radius:6px;padding:3px 10px;
+  cursor:pointer;transition:all 0.15s;font-family:var(--font-mono);
+}
+.snippet-copy:hover{color:var(--text);border-color:var(--border-h);}
+.snippet-body{
+  padding:20px;font-family:var(--font-mono);font-size:0.76rem;
+  line-height:1.9;overflow-x:auto;
+}
+.snippet-title{font-weight:700;font-size:0.95rem;color:var(--text);margin-bottom:6px;}
+.snippet-desc{font-size:0.83rem;color:var(--text-2);margin-bottom:0;}
+
+/* ── CTA ─────────────────────────────────────────────────────────── */
+.cta-section{
+  padding:120px max(24px,6vw);
+  text-align:center;position:relative;overflow:hidden;
+}
+.cta-glow{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:700px;height:400px;
+  background:radial-gradient(ellipse at center,rgba(59,130,246,0.1) 0%,transparent 70%);
+  pointer-events:none;
+}
+.cta-title{
+  font-family:var(--font-hd);font-size:clamp(2rem,5vw,3.5rem);
+  font-weight:800;letter-spacing:-0.04em;color:var(--text);
+  max-width:640px;margin:0 auto 16px;line-height:1.15;
+}
+.cta-sub{
+  font-size:1.05rem;color:var(--text-2);max-width:440px;
+  margin:0 auto 40px;line-height:1.7;
+}
+.cta-actions{
+  display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;
+}
+.cta-note{
+  margin-top:20px;font-size:0.78rem;color:var(--text-3);
+}
+.cta-note span{color:var(--green);}
+
+/* ── FOOTER ──────────────────────────────────────────────────────── */
+footer{
+  padding:40px max(24px,6vw);
+  border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  gap:20px;flex-wrap:wrap;
+}
+.footer-logo{display:flex;align-items:center;gap:10px;}
+.footer-links{display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
+.footer-link{font-size:0.82rem;color:var(--text-3);transition:color 0.15s;}
+.footer-link:hover{color:var(--text-2);}
+.footer-copy{font-size:0.78rem;color:var(--text-3);}
+
+/* ── Utility ─────────────────────────────────────────────────────── */
+.reveal{opacity:0;transform:translateY(24px);transition:opacity 0.6s ease,transform 0.6s ease;}
+.reveal.visible{opacity:1;transform:none;}
+.text-center{text-align:center;}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   DASHBOARD STYLES
+══════════════════════════════════════════════════════════════════ */
+
+/* ── Design Tokens ─────────────────────────────────────────────────────── */
+:root {
+  --bg:        #060b14;
+  --bg-card:   #0b1221;
+  --bg-hover:  #0f1a2e;
+  --border:    rgba(99,179,237,0.10);
+  --border-hi: rgba(99,179,237,0.22);
+  --primary:   #3b82f6;
+  --primary-d: #2563eb;
+  --green:     #10b981;
+  --amber:     #f59e0b;
+  --red:       #ef4444;
+  --purple:    #8b5cf6;
+  --cyan:      #06b6d4;
+  --text:      #e2e8f0;
+  --text-2:    #94a3b8;
+  --text-3:    #475569;
+  --font-ui:   'Outfit', sans-serif;
+  --font-head: 'Syne', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius:    12px;
+  --sidebar-w: 240px;
+  --topbar-h:  58px;
+}
+
+/* ── Reset ─────────────────────────────────────────────────────────────── */
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+/* dashboard body defaults applied via .app-mode class */
+a { text-decoration:none; color:inherit; }
+button { cursor:pointer; font-family:var(--font-ui); }
+input,select,textarea { font-family:var(--font-ui); }
+ul { list-style:none; }
+
+/* ── Scrollbar ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width:5px; height:5px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:rgba(99,179,237,0.15); border-radius:99px; }
+
+/* ── Layout ────────────────────────────────────────────────────────────── */
+/* ══ END LANDING CSS ══ */
+/* ── Design Tokens ─────────────────────────────────────────────────────── */
+:root {
+  --bg:        #060b14;
+  --bg-card:   #0b1221;
+  --bg-hover:  #0f1a2e;
+  --border:    rgba(99,179,237,0.10);
+  --border-hi: rgba(99,179,237,0.22);
+  --primary:   #3b82f6;
+  --primary-d: #2563eb;
+  --green:     #10b981;
+  --amber:     #f59e0b;
+  --red:       #ef4444;
+  --purple:    #8b5cf6;
+  --cyan:      #06b6d4;
+  --text:      #e2e8f0;
+  --text-2:    #94a3b8;
+  --text-3:    #475569;
+  --font-ui:   'Outfit', sans-serif;
+  --font-head: 'Syne', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius:    12px;
+  --sidebar-w: 240px;
+  --topbar-h:  58px;
+}
+
+/* ── Reset ─────────────────────────────────────────────────────────────── */
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+/* NOTE: overflow is controlled per-mode; landing needs scroll, app needs hidden */
+html { height:100%; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-ui); font-size:15px; }
+html.app-mode body { overflow: hidden; height: 100%; }
+@media(max-width:768px) {
+  html.app-mode body { overflow: hidden; }
+  html.app-mode #app { overflow: hidden; }
+}
+a { text-decoration:none; color:inherit; }
+button { cursor:pointer; font-family:var(--font-ui); }
+input,select,textarea { font-family:var(--font-ui); }
+ul { list-style:none; }
+
+/* ── Scrollbar ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width:5px; height:5px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:rgba(99,179,237,0.15); border-radius:99px; }
+
+/* ── Layout ────────────────────────────────────────────────────────────── */
+/* flex-direction:row overrides the column set in the landing-mode #app rule */
+#app { display:flex; flex-direction:row; height:100vh; width:100vw; overflow:hidden; }
+
+/* ── Mobile viewport height fix (address bar issues) ──────────────────── */
+@supports (height: 100dvh) {
+  html.app-mode #app { height: 100dvh; }
+}
+
+/* ── Sidebar ───────────────────────────────────────────────────────────── */
+#sidebar {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  background: var(--bg-card);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s;
+  z-index: 200;
+}
+.sidebar-logo {
+  height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sidebar-logo-mark {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, var(--primary), var(--cyan));
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.sidebar-logo-mark svg { width:18px; height:18px; color:#fff; }
+.sidebar-logo-name {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.sidebar-logo-badge {
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  background: rgba(59,130,246,0.15);
+  color: var(--primary);
+  border: 1px solid rgba(59,130,246,0.25);
+  border-radius: 4px;
+  padding: 2px 5px;
+  text-transform: uppercase;
+  margin-left: auto;
+}
+.sidebar-section {
+  padding: 10px 10px 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-top: 8px;
+}
+.sidebar-nav { flex: 1; overflow-y: auto; padding: 6px 8px; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: var(--text-2);
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.15s;
+  margin-bottom: 1px;
+  cursor: pointer;
+  user-select: none;
+}
+.nav-item svg { width:16px; height:16px; flex-shrink:0; opacity:0.7; }
+.nav-item:hover { background: var(--bg-hover); color: var(--text); }
+.nav-item:hover svg { opacity:1; }
+.nav-item.active {
+  background: rgba(59,130,246,0.12);
+  color: var(--primary);
+  font-weight: 600;
+}
+.nav-item.active svg { opacity:1; color: var(--primary); }
+.nav-badge {
+  margin-left: auto;
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: var(--primary);
+  color: #fff;
+  border-radius: 99px;
+  padding: 1px 7px;
+  min-width: 18px;
+  text-align: center;
+}
+.nav-badge.green { background: var(--green); }
+.nav-badge.amber { background: var(--amber); }
+
+.sidebar-bottom {
+  padding: 12px 8px;
+  border-top: 1px solid var(--border);
+}
+.user-chip {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.user-chip:hover { background: var(--bg-hover); }
+.user-avatar {
+  width: 30px; height: 30px; border-radius: 8px;
+  background: linear-gradient(135deg, var(--primary), var(--purple));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.8rem; font-weight: 700; color: #fff;
+  flex-shrink: 0;
+}
+.user-info { min-width: 0; }
+.user-name { font-size: 0.82rem; font-weight: 600; color: var(--text); line-height: 1.2; }
+.user-role { font-size: 0.68rem; color: var(--text-3); margin-top: 1px; }
+.user-chip-caret { margin-left: auto; color: var(--text-3); }
+
+/* ── Main area ─────────────────────────────────────────────────────────── */
+#main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+
+/* ── Topbar ────────────────────────────────────────────────────────────── */
+#topbar {
+  height: var(--topbar-h);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 12px;
+  flex-shrink: 0;
+  background: var(--bg-card);
+}
+.topbar-breadcrumb {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.82rem; color: var(--text-2);
+}
+.topbar-breadcrumb .crumb-active {
+  color: var(--text); font-weight: 600;
+}
+.topbar-breadcrumb svg { width:14px; height:14px; opacity:0.4; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.topbar-btn {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.topbar-btn:hover { border-color: var(--border-hi); color: var(--text); background: var(--bg-hover); }
+.topbar-btn svg { width:14px; height:14px; }
+.topbar-btn.primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.topbar-btn.primary:hover { background: var(--primary-d); border-color: var(--primary-d); }
+.topbar-icon-btn {
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.topbar-icon-btn:hover { border-color: var(--border-hi); color: var(--text); background: var(--bg-hover); }
+.topbar-icon-btn svg { width:15px; height:15px; }
+.notif-dot { position: relative; }
+.notif-dot::after {
+  content:''; position:absolute; top:6px; right:6px;
+  width:6px; height:6px; background:var(--primary);
+  border-radius:50%; border:1.5px solid var(--bg-card);
+}
+
+/* ── Content area ──────────────────────────────────────────────────────── */
+#content-area { flex:1; overflow:hidden; position:relative; }
+.page { display:none; height:100%; overflow-y:auto; overflow-x:hidden; padding:28px 28px; -webkit-overflow-scrolling:touch; }
+.page.active { display:block; }
+
+/* ── Page header ───────────────────────────────────────────────────────── */
+.page-header { margin-bottom: 28px; }
+.page-title {
+  font-family: var(--font-head);
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.page-subtitle { font-size: 0.875rem; color: var(--text-2); line-height: 1.5; }
+.page-header-row {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+
+/* ── Stat Cards ────────────────────────────────────────────────────────── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.stat-card:hover { border-color: var(--border-hi); }
+.stat-card::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  background: var(--accent-color, var(--primary));
+  opacity: 0.6;
+}
+.stat-icon {
+  width: 36px; height: 36px; border-radius: 8px;
+  background: var(--icon-bg, rgba(59,130,246,0.1));
+  border: 1px solid var(--icon-border, rgba(59,130,246,0.2));
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 14px;
+}
+.stat-icon svg { width:17px; height:17px; color: var(--icon-color, var(--primary)); }
+.stat-value {
+  font-family: var(--font-head);
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.04em;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.stat-label { font-size: 0.78rem; color: var(--text-2); font-weight: 500; }
+.stat-delta {
+  position: absolute; top: 18px; right: 18px;
+  font-size: 0.72rem; font-weight: 600;
+  padding: 3px 8px; border-radius: 99px;
+}
+.stat-delta.up { background: rgba(16,185,129,0.12); color: var(--green); }
+.stat-delta.down { background: rgba(239,68,68,0.1); color: var(--red); }
+
+/* ── Cards ─────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.card-title { font-size: 0.875rem; font-weight: 700; color: var(--text); }
+.card-subtitle { font-size: 0.78rem; color: var(--text-2); margin-top: 1px; }
+.card-body { padding: 20px; }
+.card-actions { display:flex; align-items:center; gap:8px; }
+
+/* ── Table ─────────────────────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; }
+table { width:100%; border-collapse:collapse; }
+th {
+  text-align: left;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+td {
+  padding: 13px 16px;
+  font-size: 0.83rem;
+  color: var(--text-2);
+  border-bottom: 1px solid rgba(99,179,237,0.05);
+  vertical-align: middle;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--bg-hover); }
+.td-main { color: var(--text); font-weight: 600; }
+.td-mono { font-family: var(--font-mono); font-size: 0.78rem; color: var(--cyan); }
+
+/* ── Status Badges ─────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px; border-radius: 99px;
+  font-size: 0.7rem; font-weight: 700;
+  white-space: nowrap;
+}
+.badge-dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
+.badge-success { background:rgba(16,185,129,0.12); color:var(--green); }
+.badge-success .badge-dot { background:var(--green); }
+.badge-error { background:rgba(239,68,68,0.1); color:var(--red); }
+.badge-error .badge-dot { background:var(--red); }
+.badge-building { background:rgba(59,130,246,0.1); color:var(--primary); }
+.badge-building .badge-dot { background:var(--primary); animation:pulse 1s infinite; }
+.badge-pending { background:rgba(245,158,11,0.1); color:var(--amber); }
+.badge-pending .badge-dot { background:var(--amber); }
+.badge-idle { background:rgba(148,163,184,0.08); color:var(--text-3); }
+.badge-idle .badge-dot { background:var(--text-3); }
+
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* ── Buttons ───────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 0.83rem; font-weight: 600;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn svg { width:14px; height:14px; flex-shrink:0; }
+.btn-primary { background:var(--primary); color:#fff; border-color:var(--primary); }
+.btn-primary:hover { background:var(--primary-d); border-color:var(--primary-d); }
+.btn-ghost { background:transparent; color:var(--text-2); border-color:var(--border); }
+.btn-ghost:hover { background:var(--bg-hover); border-color:var(--border-hi); color:var(--text); }
+.btn-danger { background:rgba(239,68,68,0.1); color:var(--red); border-color:rgba(239,68,68,0.25); }
+.btn-danger:hover { background:rgba(239,68,68,0.18); border-color:rgba(239,68,68,0.4); }
+.btn-success { background:rgba(16,185,129,0.12); color:var(--green); border-color:rgba(16,185,129,0.25); }
+.btn-success:hover { background:rgba(16,185,129,0.2); border-color:rgba(16,185,129,0.4); }
+.btn-sm { padding:5px 11px; font-size:0.78rem; }
+.btn-lg { padding:11px 22px; font-size:0.93rem; }
+.btn:disabled { opacity:0.5; cursor:not-allowed; }
+.btn-icon { padding:7px; border-radius:7px; }
+
+/* ── Form Elements ─────────────────────────────────────────────────────── */
+.field { margin-bottom: 18px; }
+.field-label {
+  display: block; margin-bottom: 6px;
+  font-size: 0.8rem; font-weight: 600; color: var(--text);
+}
+.field-hint { font-size: 0.72rem; color: var(--text-3); margin-top: 4px; line-height: 1.4; }
+.field-error { font-size: 0.72rem; color: var(--red); margin-top: 4px; }
+.input {
+  width: 100%;
+  padding: 9px 12px;
+  background: rgba(2,6,23,0.6);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.875rem;
+  transition: border-color 0.15s;
+  outline: none;
+}
+.input:focus { border-color: rgba(59,130,246,0.5); }
+.input::placeholder { color: var(--text-3); }
+.input-mono { font-family: var(--font-mono); font-size: 0.82rem; }
+.input-group { display:flex; gap:0; }
+.input-group .input { border-radius:8px 0 0 8px; flex:1; }
+.input-group .btn { border-radius:0 8px 8px 0; border-left:none; }
+.select {
+  width: 100%;
+  padding: 9px 12px;
+  background: rgba(2,6,23,0.6);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.875rem;
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+.select:focus { border-color: rgba(59,130,246,0.5); }
+textarea.input { resize: vertical; min-height: 80px; }
+
+/* ── Env Vars Editor ───────────────────────────────────────────────────── */
+.env-row {
+  display: grid; grid-template-columns: 1fr 1fr auto;
+  gap: 8px; align-items: center; margin-bottom: 8px;
+}
+.env-row .btn-icon { color: var(--red); border-color: rgba(239,68,68,0.2); background: rgba(239,68,68,0.05); }
+.env-row .btn-icon:hover { background: rgba(239,68,68,0.12); }
+.env-row .btn-icon svg { width:13px; height:13px; }
+
+/* ── Terminal ──────────────────────────────────────────────────────────── */
+.terminal-wrap {
+  background: #000d1a;
+  border-radius: 0 0 var(--radius) var(--radius);
+  border: 1px solid var(--border);
+  border-top: none;
+  overflow: hidden;
+  position: relative;
+}
+.terminal-topbar {
+  background: #001020;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 10px 16px;
+  display: flex; align-items: center; gap: 10px;
+}
+.term-dots { display:flex; gap:5px; }
+.term-dot { width:11px; height:11px; border-radius:50%; }
+.term-dot.red { background:#ef4444; }
+.term-dot.yellow { background:#f59e0b; }
+.term-dot.green { background:#10b981; }
+.term-title { font-family:var(--font-mono); font-size:0.72rem; color:var(--text-3); margin-left:4px; }
+.term-status { margin-left:auto; }
+#terminal { height: clamp(320px, 50vh, 520px); }
+.xterm { padding: 12px; }
+
+@media(max-width:768px) {
+  #terminal { height: clamp(280px, 45vh, 420px); }
+  .terminal-topbar { padding: 8px 12px; }
+  .term-title { font-size: 0.65rem; }
+}
+
+/* ── Deploy Progress ───────────────────────────────────────────────────── */
+.deploy-steps { display:flex; flex-direction:column; gap:0; }
+.deploy-step {
+  display: flex; gap: 14px; align-items: flex-start;
+  padding: 14px 0;
+  position: relative;
+}
+.deploy-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 14px; top: 42px; bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+.step-icon {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1.5px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-3);
+  position: relative; z-index: 1;
+}
+.step-icon.done { background:rgba(16,185,129,0.15); border-color:rgba(16,185,129,0.4); color:var(--green); }
+.step-icon.active { background:rgba(59,130,246,0.15); border-color:rgba(59,130,246,0.4); color:var(--primary); animation:stepPulse 1.5s infinite; }
+.step-icon.error { background:rgba(239,68,68,0.1); border-color:rgba(239,68,68,0.3); color:var(--red); }
+@keyframes stepPulse { 0%,100%{box-shadow:0 0 0 0 rgba(59,130,246,0.3)} 50%{box-shadow:0 0 0 6px rgba(59,130,246,0)} }
+.step-body { flex:1; padding-top:3px; }
+.step-name { font-size:0.85rem; font-weight:600; color:var(--text); margin-bottom:2px; }
+.step-desc { font-size:0.75rem; color:var(--text-3); }
+.step-time { font-family:var(--font-mono); font-size:0.72rem; color:var(--text-3); }
+
+/* ── Project Card ──────────────────────────────────────────────────────── */
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+.project-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.15s;
+  position: relative;
+  overflow: hidden;
+}
+.project-card:hover { border-color: var(--border-hi); transform: translateY(-1px); }
+.project-card-header { display:flex; align-items:flex-start; gap:12px; margin-bottom:14px; }
+.project-icon {
+  width:40px; height:40px; border-radius:10px;
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink:0;
+}
+.project-icon svg { width:20px; height:20px; }
+.project-name { font-weight:700; font-size:0.95rem; color:var(--text); margin-bottom:2px; }
+.project-url { font-family:var(--font-mono); font-size:0.72rem; color:var(--cyan); }
+.project-meta { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:12px; }
+.project-meta-item { display:flex; align-items:center; gap:4px; font-size:0.72rem; color:var(--text-3); }
+.project-meta-item svg { width:12px; height:12px; }
+.project-actions { display:flex; gap:7px; margin-top:14px; }
+
+/* ── Empty State ───────────────────────────────────────────────────────── */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 60px 20px;
+}
+.empty-icon {
+  width: 56px; height: 56px; border-radius: 14px;
+  background: rgba(59,130,246,0.07);
+  border: 1px solid rgba(59,130,246,0.15);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 18px;
+}
+.empty-icon svg { width:26px; height:26px; color:var(--primary); opacity:0.6; }
+.empty-title { font-weight:700; color:var(--text); font-size:0.95rem; margin-bottom:6px; }
+.empty-desc { font-size:0.82rem; color:var(--text-2); max-width:320px; line-height:1.5; margin-bottom:20px; }
+
+/* ── Two-col layout ────────────────────────────────────────────────────── */
+.two-col { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+.three-col { display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px; }
+@media(max-width:900px) { .two-col,.three-col { grid-template-columns:1fr; } }
+
+/* ── Tabs ──────────────────────────────────────────────────────────────── */
+.tabs { display:flex; border-bottom:1px solid var(--border); margin-bottom:20px; gap:2px; }
+.tab {
+  padding: 10px 16px; font-size:0.82rem; font-weight:600;
+  color:var(--text-2); border-bottom:2px solid transparent;
+  cursor:pointer; transition:all 0.15s; margin-bottom:-1px;
+}
+.tab:hover { color:var(--text); }
+.tab.active { color:var(--primary); border-bottom-color:var(--primary); }
+
+/* ── Divider ───────────────────────────────────────────────────────────── */
+.divider { height:1px; background:var(--border); margin:20px 0; }
+
+/* ── Modal ─────────────────────────────────────────────────────────────── */
+.modal-backdrop {
+  display: none; position:fixed; inset:0;
+  background:rgba(2,6,23,0.85);
+  backdrop-filter:blur(6px);
+  z-index:1000;
+  align-items:center; justify-content:center;
+}
+.modal-backdrop.open { display:flex; }
+.modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border-hi);
+  border-radius: 16px;
+  width: min(96vw, 560px);
+  max-height: 92vh;
+  overflow-y: auto;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.7);
+  animation: modalIn 0.2s ease;
+}
+@keyframes modalIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
+.modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: flex-start; gap: 14px;
+}
+.modal-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.modal-icon svg { width:20px; height:20px; }
+.modal-title { font-family:var(--font-head); font-size:1.1rem; font-weight:800; color:var(--text); margin-bottom:3px; }
+.modal-subtitle { font-size:0.8rem; color:var(--text-2); line-height:1.4; }
+.modal-close {
+  margin-left:auto; width:28px; height:28px; border-radius:6px;
+  background:transparent; border:none; color:var(--text-3);
+  display:flex; align-items:center; justify-content:center;
+  transition:all 0.15s; flex-shrink:0;
+}
+.modal-close:hover { background:var(--bg-hover); color:var(--text); }
+.modal-close svg { width:16px; height:16px; }
+.modal-body { padding: 20px 24px; }
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  display: flex; gap: 10px; justify-content: flex-end;
+}
+
+/* ── Activity feed ─────────────────────────────────────────────────────── */
+.activity-feed { display:flex; flex-direction:column; gap:0; }
+.activity-item {
+  display:flex; gap:12px; align-items:flex-start;
+  padding:12px 0; border-bottom:1px solid rgba(99,179,237,0.05);
+}
+.activity-item:last-child { border-bottom:none; }
+.activity-avatar {
+  width:30px; height:30px; border-radius:8px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:0.72rem; font-weight:700;
+}
+.activity-content { flex:1; min-width:0; }
+.activity-text { font-size:0.8rem; color:var(--text); line-height:1.4; }
+.activity-text strong { color:var(--text); }
+.activity-time { font-size:0.7rem; color:var(--text-3); margin-top:2px; }
+
+/* ── Inline back btn ───────────────────────────────────────────────────── */
+.back-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.8rem; font-weight: 600; color: var(--text-2);
+  margin-bottom: 18px; cursor: pointer;
+  transition: color 0.15s;
+}
+.back-link svg { width:14px; height:14px; }
+.back-link:hover { color: var(--text); }
+
+/* ── Alert ─────────────────────────────────────────────────────────────── */
+.alert {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 13px 16px;
+  border-radius: 9px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+.alert svg { width:16px; height:16px; flex-shrink:0; margin-top:1px; }
+.alert-info { background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.2); color:#93c5fd; }
+.alert-success { background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.2); color:#6ee7b7; }
+.alert-warning { background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.2); color:#fcd34d; }
+.alert-error { background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.2); color:#fca5a5; }
+
+/* ── Code block ────────────────────────────────────────────────────────── */
+.code-block {
+  background: #000d1a;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: #7dd3fc;
+  overflow-x: auto;
+  line-height: 1.6;
+}
+.code-block .ck { color: #c084fc; }
+.code-block .cs { color: #86efac; }
+.code-block .cn { color: #93c5fd; }
+
+/* ── Quick Action Buttons ──────────────────────────────────────────────── */
+.dash-quick-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; padding: 16px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-2);
+  font-size: 0.78rem; font-weight: 600;
+  transition: all 0.15s; cursor: pointer;
+}
+.dash-quick-btn svg { width:20px; height:20px; opacity:0.7; }
+.dash-quick-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-hi);
+  color: var(--primary);
+  transform: translateY(-2px);
+}
+.dash-quick-btn:hover svg { opacity: 1; color: var(--primary); }
+@media(max-width:480px) {
+  .dash-quick-btn { padding: 12px 8px; font-size: 0.72rem; gap: 6px; }
+  .dash-quick-btn svg { width: 16px; height: 16px; }
+}
+
+/* ── API rows ──────────────────────────────────────────────────────────── */
+.api-row {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+}
+.api-method {
+  font-family: var(--font-mono); font-size: 0.7rem; font-weight: 700;
+  color: #fff; padding: 2px 7px; border-radius: 4px; flex-shrink: 0;
+}
+.api-desc {
+  font-size: 0.75rem; color: var(--text-3); margin-left: auto;
+}
+@media(max-width:480px) {
+  .api-row { flex-wrap: wrap; gap: 6px; }
+  .api-desc { margin-left: 0; width: 100%; padding-left: 46px; }
+}
+
+/* ── Progress bar ──────────────────────────────────────────────────────── */
+.progress-bar {
+  height: 4px; background: rgba(99,179,237,0.1);
+  border-radius: 99px; overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--cyan));
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+
+/* ── Mobile sidebar toggle ─────────────────────────────────────────────── */
+.menu-toggle {
+  display: none;
+  width: 34px; height: 34px; border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent; color: var(--text-2);
+  align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.menu-toggle svg { width:16px; height:16px; }
+
+/* ── Sidebar overlay (mobile backdrop) ─────────────────────────────────── */
+.sidebar-overlay {
+  display: none; position:fixed; inset:0; z-index:199;
+  background:rgba(0,0,0,0.55);
+}
+
+/* ── Deploy form grid ──────────────────────────────────────────────────── */
+.deploy-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+
+/* ══════════════════════════════════════════════════════════════
+   RESPONSIVE — TABLET  (≤ 900px)
+══════════════════════════════════════════════════════════════ */
+@media(max-width:900px) {
+  .two-col, .three-col { grid-template-columns:1fr; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   RESPONSIVE — MOBILE  (≤ 768px)
+══════════════════════════════════════════════════════════════ */
+@media(max-width:768px) {
+  /* Sidebar: slide in from left as overlay */
+  #sidebar {
+    position: fixed; left:0; top:0; bottom:0;
+    transform: translateX(-100%);
+    z-index: 300;
+    transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+  }
+  #sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+
+  /* Show hamburger button */
+  .menu-toggle { display:flex; }
+
+  /* Main takes full width */
+  #main { width: 100%; }
+
+  /* Page content padding */
+  .page { padding: 16px 12px 24px; }
+
+  /* Topbar: tighter padding */
+  #topbar { padding: 0 12px; gap: 8px; }
+  .topbar-breadcrumb { font-size:0.78rem; }
+
+  /* Stats grid: 2 columns on mobile */
+  .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom:16px; }
+  .stat-card { padding:14px; }
+  .stat-value { font-size:1.5rem; }
+
+  /* Project cards: single column */
+  .projects-grid { grid-template-columns: 1fr; }
+
+  /* Deploy form: single column */
+  .deploy-form-grid { grid-template-columns: 1fr; }
+
+  /* Page header row: stack vertically */
+  .page-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .page-header-row > button { width: 100%; justify-content: center; }
+  .page-header-row > div[style*="display:flex"] { width:100%; flex-wrap:wrap; }
+  .page-header-row > div[style*="display:flex"] .btn { flex:1; justify-content:center; }
+
+  /* Page header */
+  .page-header { margin-bottom: 18px; }
+  .page-title { font-size:1.4rem; }
+
+  /* Env var rows: collapse key/value stacked */
+  .env-row { grid-template-columns: 1fr auto; }
+  .env-row .input:first-child { grid-column: 1 / -1; }
+
+  /* Tables: horizontal scroll */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { min-width: 480px; }
+
+  /* Modal: full width on mobile */
+  .modal { width: 96vw; border-radius: 14px; }
+  .modal-body { padding: 16px; }
+  .modal-header { padding: 16px 16px 12px; }
+  .modal-footer { padding: 12px 16px; }
+
+  /* Card body: tighter */
+  .card-body { padding: 14px; }
+  .card-header { padding: 12px 14px; }
+
+  /* Topbar "New Deploy" button: icon-only on mobile */
+  .topbar-btn .topbar-btn-label { display: none; }
+  .topbar-btn { padding: 6px 10px; }
+
+  /* Tabs: scrollable if overflow */
+  .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab { white-space: nowrap; }
+
+  /* Two / three col already handled by 900px breakpoint */
+  .two-col, .three-col { grid-template-columns: 1fr; }
+
+  /* Settings tab labels: shorter */
+  #settingsTabs .tab { padding: 10px 10px; font-size: 0.78rem; }
+
+  /* Terminal on mobile: tall and responsive */
+  #terminal { height: clamp(260px, 42vh, 380px) !important; }
+  .terminal-wrap { overflow: hidden; }
+  .terminal-topbar { padding: 8px 12px; gap: 8px; }
+  .term-title { font-size: 0.65rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:120px; }
+
+  /* Live logs page: full width terminal */
+  #page-logs .two-col { display: block; }
+  #page-logs .two-col > div { width: 100%; }
+
+  /* Build steps: more compact */
+  .deploy-step { padding: 10px 0; gap: 10px; }
+  .step-name { font-size:0.82rem; }
+  .step-desc { font-size:0.7rem; }
+
+  /* Activity feed text */
+  .activity-text { font-size: 0.75rem; }
+
+  /* Dashboard grid improvements */
+  #page-dashboard .two-col { grid-template-columns: 1fr; }
+
+  /* Prevent any horizontal overflow */
+  .page > * { max-width: 100%; }
+  pre, code { overflow-x: auto; max-width: 100%; }
+  .code-block { font-size: 0.72rem; }
+
+  /* Recent deployments table responsive */
+  .card .table-wrap { margin: 0 -14px; padding: 0 14px; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   RESPONSIVE — SMALL MOBILE  (≤ 480px)
+══════════════════════════════════════════════════════════════ */
+@media(max-width:480px) {
+  /* Stats: single column */
+  .stats-grid { grid-template-columns: 1fr; }
+
+  /* Page title smaller */
+  .page-title { font-size: 1.35rem; }
+
+  /* Topbar: tighter */
+  #topbar { padding: 0 10px; }
+  .topbar-breadcrumb { display: none; }
+
+  /* Buttons in header: full width */
+  .page-header-row > button { width:100%; }
+
+  /* Card header row: wrap on tiny screens */
+  .card-header { flex-wrap: wrap; gap: 8px; }
+
+  /* Project card meta: wrap nicely */
+  .project-meta { gap: 6px; }
+
+  /* Env rows: full stacked layout */
+  .env-row { grid-template-columns: 1fr; }
+  .env-row .btn-icon { justify-self: end; }
+
+  /* Deploy steps text */
+  .step-name { font-size: 0.8rem; }
+  .step-desc { font-size: 0.72rem; }
+
+  /* Modal footer: stack buttons */
+  .modal-footer { flex-direction: column; }
+  .modal-footer .btn { width:100%; justify-content: center; }
+}
+
+/* ── Toast ─────────────────────────────────────────────────────────────── */
+#toast-wrap { position:fixed; top:16px; right:16px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+.toast {
+  display:flex; align-items:center; gap:10px;
+  padding:11px 16px;
+  background:var(--bg-card);
+  border:1px solid var(--border-hi);
+  border-radius:10px;
+  font-size:0.82rem;
+  font-weight:500;
+  color:var(--text);
+  box-shadow:0 8px 24px rgba(0,0,0,0.5);
+  animation:toastIn 0.25s ease;
+  max-width:340px;
+}
+.toast svg { width:15px; height:15px; flex-shrink:0; }
+.toast.success { border-color:rgba(16,185,129,0.3); }
+.toast.success svg { color:var(--green); }
+.toast.error { border-color:rgba(239,68,68,0.3); }
+.toast.error svg { color:var(--red); }
+.toast.info svg { color:var(--primary); }
+@keyframes toastIn { from{opacity:0;transform:translateX(16px)} to{opacity:1;transform:none} }
+@keyframes fadeOut { to{opacity:0;transform:translateX(16px)} }
+</style>
+</head>
+<body>
+
+<div id="toast-wrap"></div>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+
+<!-- ═══════════════════════════════════════════
+     LANDING PAGE VIEW
+═══════════════════════════════════════════ -->
+<div id="landing-view">
+<!-- ── NAV ──────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-logo">
+    <div class="nav-logo-mark">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>
+        <polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
+      </svg>
+    </div>
+    <span class="nav-logo-name">DeployBoard</span>
+    <!-- beta badge removed -->
+  </div>
+  <div class="nav-links">
+    <a href="#features" class="nav-link">Features</a>
+    <a href="#how-it-works" class="nav-link">How it works</a>
+    <a href="#snippets" class="nav-link">Docs</a>
+  </div>
+  <div class="nav-actions">
+    <a href="#" onclick="showDashboard();return false;" class="btn-nav">Dashboard</a>
+    <a href="#" onclick="showDashboard();return false;" class="btn-nav btn-nav-primary">Get Started</a>
+  </div>
+</nav>
+
+<!-- ── HERO ──────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-glow-2"></div>
+
+  <div class="hero-eyebrow">
+    <span class="hero-eyebrow-dot"></span>
+    Now in open beta — ship your first site free
+  </div>
+
+  <h1 class="hero-h1">Deploy <span class="accent">anything</span> to the web.</h1>
+  <div class="hero-typewriter-wrap">
+    <span class="hero-typewriter" id="typewriter">React Apps</span>
+  </div>
+
+  <p class="hero-sub">
+    A white-label static hosting platform built for developers. Connect a GitHub repo,
+    configure your build, and ship in seconds — with real-time logs and wildcard subdomain routing.
+  </p>
+
+  <div class="hero-actions">
+    <a href="#" onclick="showDashboard();return false;" class="btn-hero-primary">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>
+      </svg>
+      Open Dashboard
+    </a>
+    <a href="#how-it-works" class="btn-hero-ghost">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+      </svg>
+      How it works
+    </a>
+  </div>
+
+  <!-- Terminal preview -->
+  <div class="hero-terminal">
+    <div class="terminal-bar">
+      <span class="term-dot r"></span>
+      <span class="term-dot y"></span>
+      <span class="term-dot g"></span>
+      <span class="terminal-title">deployboard — build terminal</span>
+    </div>
+    <div class="terminal-body" id="terminalBody">
+      <span class="tl tl-prompt">$ <span class="tl-cmd">git push origin main</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- ── METRICS BAR ─────────────────────────────────────────────────── -->
+<div class="metrics-bar reveal">
+  <div class="metric-item">
+    <div class="metric-value">5<span class="unit">s</span></div>
+    <div class="metric-label">Avg deployment start</div>
+  </div>
+  <div class="metric-item">
+    <div class="metric-value">99<span class="unit">%</span></div>
+    <div class="metric-label">Build success rate</div>
+  </div>
+  <div class="metric-item">
+    <div class="metric-value">100<span class="unit">%</span></div>
+    <div class="metric-label">Real-time log streaming</div>
+  </div>
+  <div class="metric-item">
+    <div class="metric-value">0<span class="unit">$</span></div>
+    <div class="metric-label">Cost to start building</div>
+  </div>
+</div>
+
+<!-- ── FEATURES ──────────────────────────────────────────────────────── -->
+<section class="section" id="features">
+  <div class="reveal">
+    <div class="section-label">Platform capabilities</div>
+    <h2 class="section-title">Everything you need to ship, nothing you don't.</h2>
+    <p class="section-sub">Built on battle-tested open source. Designed for real developer workflows.</p>
+  </div>
+
+  <div class="features-grid">
+    <!-- Real-time logs -->
+    <div class="feature-card reveal">
+      <div class="feature-icon" style="background:rgba(6,182,212,0.1);border-color:rgba(6,182,212,0.2);color:var(--cyan);">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+      </div>
+      <div class="feature-name">Real-time Build Logs</div>
+      <div class="feature-desc">Xterm.js-powered terminal streams every line of your build output as it happens. No waiting, no refreshing — just pure transparency.</div>
+      <span class="feature-tag" style="background:rgba(6,182,212,0.1);color:var(--cyan);">Socket.io + Xterm.js</span>
+    </div>
+
+    <!-- GitHub Integration -->
+    <div class="feature-card reveal">
+      <div class="feature-icon" style="background:rgba(139,92,246,0.1);border-color:rgba(139,92,246,0.2);color:var(--purple);">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+        </svg>
+      </div>
+      <div class="feature-name">GitHub Integration</div>
+      <div class="feature-desc">Connect any public or private repository. Authenticate with a Personal Access Token, configure your branch, and trigger builds on demand.</div>
+      <span class="feature-tag" style="background:rgba(139,92,246,0.1);color:var(--purple);">PAT Auth</span>
+    </div>
+
+    <!-- Wildcard domains -->
+    <div class="feature-card reveal">
+      <div class="feature-icon" style="background:rgba(59,130,246,0.1);border-color:rgba(59,130,246,0.2);color:var(--primary);">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="2" y1="12" x2="22" y2="12"/>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        </svg>
+      </div>
+      <div class="feature-name">Wildcard Subdomain Routing</div>
+      <div class="feature-desc">Nginx maps *.yourdomain.com to the correct project folder automatically. Every project gets its own clean subdomain, zero config.</div>
+      <span class="feature-tag" style="background:rgba(59,130,246,0.1);color:var(--primary);">Nginx + DNS</span>
+    </div>
+
+    <!-- Docker isolation -->
+    <div class="feature-card reveal">
+      <div class="feature-icon" style="background:rgba(16,185,129,0.1);border-color:rgba(16,185,129,0.2);color:var(--green);">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+          <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+        </svg>
+      </div>
+      <div class="feature-name">Docker Build Isolation</div>
+      <div class="feature-desc">Each build runs in a fresh, isolated container on your VPS. No dependency leakage between projects. Switch to local mode for testing on Render or PwD.</div>
+      <span class="feature-tag" style="background:rgba(16,185,129,0.1);color:var(--green);">Docker + Local modes</span>
+    </div>
+
+    <!-- MongoDB persistence -->
+    <div class="feature-card reveal">
+      <div class="feature-icon" style="background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.2);color:var(--amber);">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <ellipse cx="12" cy="5" rx="9" ry="3"/>
+          <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+          <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+        </svg>
+      </div>
+      <div class="feature-name">Project Persistence</div>
+      <div class="feature-desc">MongoDB stores all project configs, deployment history, and environment variables. Every build run is logged with duration, status, and full output.</div>
+      <span class="feature-tag" style="background:rgba(245,158,11,0.1);color:var(--amber);">MongoDB</span>
+    </div>
+
+    <!-- Smart cleanup -->
+    <div class="feature-card reveal">
+      <div class="feature-icon" style="background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.2);color:var(--red);">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+      </div>
+      <div class="feature-name">Automatic Cleanup</div>
+      <div class="feature-desc">Temporary build directories are always removed after a build — success or failure. Disk usage stays clean even across hundreds of deployments.</div>
+      <span class="feature-tag" style="background:rgba(239,68,68,0.08);color:var(--red);">Zero waste</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── HOW IT WORKS ────────────────────────────────────────────────── -->
+<section class="how-section" id="how-it-works">
+  <div class="reveal text-center" style="max-width:600px;margin:0 auto 56px;">
+    <div class="section-label" style="justify-content:center;">Deploy flow</div>
+    <h2 class="section-title" style="max-width:none;">From push to live in three steps.</h2>
+    <p class="section-sub" style="margin:0 auto;max-width:none;">No YAML. No complex configuration. Just GitHub, a build command, and a subdomain.</p>
+  </div>
+
+  <div class="how-grid">
+    <div class="how-steps">
+      <div class="how-step active" onclick="selectStep(this,0)">
+        <div class="how-step-num">01</div>
+        <div>
+          <div class="how-step-title">Connect your repository</div>
+          <div class="how-step-desc">Paste your GitHub repo URL and optionally a Personal Access Token for private repos. Choose the branch to deploy.</div>
+        </div>
+      </div>
+      <div class="how-step" onclick="selectStep(this,1)">
+        <div class="how-step-num">02</div>
+        <div>
+          <div class="how-step-title">Configure your build</div>
+          <div class="how-step-desc">Set your install and build commands (defaults to npm install + npm run build), output directory, Node.js version, and env vars.</div>
+        </div>
+      </div>
+      <div class="how-step" onclick="selectStep(this,2)">
+        <div class="how-step-num">03</div>
+        <div>
+          <div class="how-step-title">Deploy and go live</div>
+          <div class="how-step-desc">Hit Deploy. Watch the real-time logs stream. Your site goes live at your-subdomain.yourdomain.com in seconds.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="how-code-wrap reveal">
+      <div class="code-tabs">
+        <div class="code-tab active" id="codeTab0" onclick="selectCodeTab(0)">deploy-request.sh</div>
+        <div class="code-tab" id="codeTab1" onclick="selectCodeTab(1)">build-config.json</div>
+        <div class="code-tab" id="codeTab2" onclick="selectCodeTab(2)">nginx.conf</div>
+      </div>
+      <div class="code-panel active" id="codePanel0">
+<span class="co"># Trigger a deployment via API</span>
+<span class="cy">curl</span> -X POST https://your-server:3001/api/deploy \
+  -H <span class="cs">"Content-Type: application/json"</span> \
+  -d '{
+    <span class="cs">"name"</span>:       <span class="cs">"my-react-app"</span>,
+    <span class="cs">"subdomain"</span>:  <span class="cs">"myapp"</span>,
+    <span class="cs">"repoUrl"</span>:    <span class="cs">"https://github.com/user/repo"</span>,
+    <span class="cs">"branch"</span>:     <span class="cs">"main"</span>,
+    <span class="cs">"installCmd"</span>: <span class="cs">"npm install"</span>,
+    <span class="cs">"buildCmd"</span>:   <span class="cs">"npm run build"</span>,
+    <span class="cs">"outputDir"</span>:  <span class="cs">"dist"</span>
+  }'
+
+<span class="co"># Response: { ok: true, deployId: "abc123" }</span>
+<span class="co"># Then listen on Socket.io for live logs</span>
+      </div>
+      <div class="code-panel" id="codePanel1">
+<span class="co">// Project config stored in MongoDB</span>
+{
+  <span class="cs">"name"</span>:       <span class="cs">"my-react-app"</span>,
+  <span class="cs">"subdomain"</span>:  <span class="cs">"myapp"</span>,
+  <span class="cs">"repoUrl"</span>:    <span class="cs">"https://github.com/user/repo"</span>,
+  <span class="cs">"branch"</span>:     <span class="cs">"main"</span>,
+  <span class="cs">"installCmd"</span>: <span class="cs">"npm install"</span>,
+  <span class="cs">"buildCmd"</span>:   <span class="cs">"npm run build"</span>,
+  <span class="cs">"outputDir"</span>:  <span class="cs">"dist"</span>,
+  <span class="cs">"nodeVer"</span>:    <span class="cs">"18"</span>,
+  <span class="cs">"envVars"</span>: {
+    <span class="cs">"VITE_API_URL"</span>: <span class="cs">"https://api.example.com"</span>
+  },
+  <span class="cs">"createdAt"</span>:  <span class="cs">"2026-04-13T10:00:00Z"</span>
+}
+      </div>
+      <div class="code-panel" id="codePanel2">
+<span class="co"># Wildcard subdomain routing</span>
+<span class="ck">server</span> {
+  <span class="ck">listen</span> <span class="cn">80</span>;
+  <span class="ck">server_name</span> ~<span class="cs">^(?&lt;subdomain&gt;.+)\.yourdomain\.com$</span>;
+
+  <span class="ck">location</span> / {
+    <span class="ck">root</span> <span class="cs">/var/www/user-sites/$subdomain/dist</span>;
+    <span class="ck">index</span> index.html;
+    <span class="ck">try_files</span> $uri $uri/ /index.html;
+  }
+
+  <span class="co"># Gzip for performance</span>
+  <span class="ck">gzip</span> <span class="cn">on</span>;
+  <span class="ck">gzip_types</span> text/plain text/css application/javascript;
+}
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── DEPLOY FLOW DIAGRAM ─────────────────────────────────────────── -->
+<section class="flow-section">
+  <div class="reveal text-center" style="max-width:600px;margin:0 auto;">
+    <div class="section-label" style="justify-content:center;">Under the hood</div>
+    <h2 class="section-title" style="max-width:none;">The full deployment pipeline.</h2>
+  </div>
+
+  <div class="flow-grid">
+    <div class="flow-step reveal">
+      <div class="flow-icon" style="color:var(--purple);">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+        </svg>
+        <div class="flow-icon-badge" style="background:var(--purple);color:#fff;">1</div>
+      </div>
+      <div class="flow-step-title">Git Clone</div>
+      <div class="flow-step-desc">Repository cloned with --depth=1 for speed. Token auth for private repos.</div>
+    </div>
+
+    <div class="flow-step reveal">
+      <div class="flow-icon" style="color:var(--amber);">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+        </svg>
+        <div class="flow-icon-badge" style="background:var(--amber);color:#000;">2</div>
+      </div>
+      <div class="flow-step-title">Install Deps</div>
+      <div class="flow-step-desc">Runs your install command with project env vars injected.</div>
+    </div>
+
+    <div class="flow-step reveal">
+      <div class="flow-icon" style="color:var(--cyan);">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="4 17 10 11 4 5"/>
+          <line x1="12" y1="19" x2="20" y2="19"/>
+        </svg>
+        <div class="flow-icon-badge" style="background:var(--cyan);color:#000;">3</div>
+      </div>
+      <div class="flow-step-title">Run Build</div>
+      <div class="flow-step-desc">npm run build (or your custom command) with NODE_ENV=production.</div>
+    </div>
+
+    <div class="flow-step reveal">
+      <div class="flow-icon" style="color:var(--primary);">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 15v4c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2v-4M17 8l-5-5-5 5M12 4v12"/>
+        </svg>
+        <div class="flow-icon-badge" style="background:var(--primary);color:#fff;">4</div>
+      </div>
+      <div class="flow-step-title">Copy Output</div>
+      <div class="flow-step-desc">Build output copied to /var/www/user-sites/subdomain/dist.</div>
+    </div>
+
+    <div class="flow-step reveal">
+      <div class="flow-icon" style="color:var(--green);">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        <div class="flow-icon-badge" style="background:var(--green);color:#fff;">5</div>
+      </div>
+      <div class="flow-step-title">Live</div>
+      <div class="flow-step-desc">Nginx serves your site instantly. No restart needed.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CODE SNIPPETS ──────────────────────────────────────────────── -->
+<section class="snippet-section" id="snippets">
+  <div class="reveal">
+    <div class="section-label">Ready to use</div>
+    <h2 class="section-title">Copy, deploy, ship.</h2>
+    <p class="section-sub">Production-ready configuration files for every part of the stack.</p>
+  </div>
+
+  <div class="snippet-grid">
+    <!-- Docker Compose -->
+    <div class="snippet-card reveal">
+      <div class="snippet-header">
+        <div>
+          <div class="snippet-title" style="font-size:0.85rem;font-weight:700;color:var(--text);margin-bottom:2px;">Docker Compose</div>
+          <div class="snippet-desc" style="font-size:0.72rem;color:var(--text-3);">Full stack: App + MongoDB + Nginx</div>
+        </div>
+        <span class="snippet-lang" style="background:rgba(6,182,212,0.1);color:var(--cyan);">YAML</span>
+      </div>
+      <div class="snippet-body">
+<span class="co">version: '3.9'</span>
+<span class="ck">services</span>:
+  <span class="cy">app</span>:
+    <span class="ck">build</span>: .
+    <span class="ck">ports</span>: [<span class="cs">"3001:3001"</span>]
+    <span class="ck">environment</span>:
+      - <span class="cs">RUNNER=${RUNNER:-local}</span>
+      - <span class="cs">MONGODB_URI=mongodb://mongo:27017/deployboard</span>
+      - <span class="cs">BASE_DOMAIN=${BASE_DOMAIN:-deployboard.app}</span>
+    <span class="ck">depends_on</span>: [mongo]
+  <span class="cy">mongo</span>:
+    <span class="ck">image</span>: <span class="cs">mongo:7-jammy</span>
+    <span class="ck">volumes</span>: [<span class="cs">mongo-data:/data/db</span>]
+  <span class="cy">nginx</span>:
+    <span class="ck">image</span>: <span class="cs">nginx:alpine</span>
+    <span class="ck">ports</span>: [<span class="cs">"80:80"</span>, <span class="cs">"443:443"</span>]
+      </div>
+    </div>
+
+    <!-- Dockerfile -->
+    <div class="snippet-card reveal">
+      <div class="snippet-header">
+        <div>
+          <div class="snippet-title" style="font-size:0.85rem;font-weight:700;color:var(--text);margin-bottom:2px;">Orchestrator Dockerfile</div>
+          <div class="snippet-desc" style="font-size:0.72rem;color:var(--text-3);">Multi-stage, production-optimized</div>
+        </div>
+        <span class="snippet-lang" style="background:rgba(59,130,246,0.1);color:var(--primary);">Docker</span>
+      </div>
+      <div class="snippet-body">
+<span class="ck">FROM</span> <span class="cs">node:18-alpine</span>
+<span class="ck">WORKDIR</span> <span class="cs">/app</span>
+<span class="co"># Install git for cloning repos</span>
+<span class="ck">RUN</span> apk add --no-cache git
+<span class="co"># Install dependencies first (layer caching)</span>
+<span class="ck">COPY</span> package*.json ./
+<span class="ck">RUN</span> npm ci --only=production
+<span class="ck">COPY</span> . .
+<span class="ck">EXPOSE</span> <span class="cn">3001</span>
+<span class="ck">CMD</span> [<span class="cs">"node"</span>, <span class="cs">"server.js"</span>]
+      </div>
+    </div>
+
+    <!-- buildRunner snippet -->
+    <div class="snippet-card reveal">
+      <div class="snippet-header">
+        <div>
+          <div class="snippet-title" style="font-size:0.85rem;font-weight:700;color:var(--text);margin-bottom:2px;">Smart Build Runner</div>
+          <div class="snippet-desc" style="font-size:0.72rem;color:var(--text-3);">Switch between local and Docker mode</div>
+        </div>
+        <span class="snippet-lang" style="background:rgba(139,92,246,0.1);color:var(--purple);">Node.js</span>
+      </div>
+      <div class="snippet-body">
+<span class="co">// buildRunner.js — dual-mode execution</span>
+<span class="ck">async function</span> <span class="cy">runBuild</span>(opts) {
+  <span class="co">// Switch via RUNNER env variable</span>
+  <span class="ck">if</span> (opts.mode === <span class="cs">'docker'</span>) {
+    <span class="co">// Isolated container on VPS</span>
+    <span class="ck">return</span> runDockerBuild(opts);
+  }
+  <span class="co">// child_process on Render/local</span>
+  <span class="ck">return</span> runLocalBuild(opts);
+}
+<span class="co">// Set RUNNER=docker on your VPS</span>
+<span class="co">// Set RUNNER=local for Render/PwD</span>
+      </div>
+    </div>
+
+    <!-- Nginx config -->
+    <div class="snippet-card reveal">
+      <div class="snippet-header">
+        <div>
+          <div class="snippet-title" style="font-size:0.85rem;font-weight:700;color:var(--text);margin-bottom:2px;">Nginx Wildcard Config</div>
+          <div class="snippet-desc" style="font-size:0.72rem;color:var(--text-3);">*.yourdomain.com auto-routing</div>
+        </div>
+        <span class="snippet-lang" style="background:rgba(16,185,129,0.1);color:var(--green);">Nginx</span>
+      </div>
+      <div class="snippet-body">
+<span class="ck">server</span> {
+  <span class="ck">listen</span> <span class="cn">80</span>;
+  <span class="co"># Capture subdomain into variable</span>
+  <span class="ck">server_name</span> ~<span class="cs">^(?&lt;sub&gt;.+)\.domain\.com$</span>;
+
+  <span class="ck">location</span> / {
+    <span class="ck">root</span> <span class="cs">/var/www/user-sites/$sub/dist</span>;
+    <span class="ck">index</span> index.html;
+    <span class="ck">try_files</span> $uri $uri/ /index.html;
+  }
+  <span class="co"># Works with React Router, Next.js, Vite</span>
+}
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ────────────────────────────────────────────────────────── -->
+<section class="cta-section">
+  <div class="cta-glow"></div>
+  <div class="reveal">
+    <h2 class="cta-title">Ready to ship your first project?</h2>
+    <p class="cta-sub">Open the dashboard, connect your GitHub repo, and have your site live in under two minutes.</p>
+    <div class="cta-actions">
+      <a href="#" onclick="showDashboard();return false;" class="btn-hero-primary">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>
+        </svg>
+        Open Dashboard
+      </a>
+      <a href="https://github.com" target="_blank" class="btn-hero-ghost">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+        </svg>
+        View on GitHub
+      </a>
+    </div>
+    <div class="cta-note"><span>Free to self-host.</span> No limits. No vendor lock-in.</div>
+  </div>
+</section>
+
+<!-- ── FOOTER ─────────────────────────────────────────────────────── -->
+<footer>
+  <div class="footer-logo">
+    <div class="nav-logo-mark" style="width:28px;height:28px;">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:#fff;">
+        <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>
+      </svg>
+    </div>
+    <span style="font-family:var(--font-hd);font-weight:700;font-size:0.9rem;">DeployBoard</span>
+  </div>
+  <div class="footer-links">
+    <a href="#features" class="footer-link">Features</a>
+    <a href="#how-it-works" class="footer-link">How it works</a>
+    <a href="#" onclick="showDashboard();return false;" class="footer-link">Dashboard</a>
+    <a href="#snippets" class="footer-link">Docs</a>
+  </div>
+  <div class="footer-copy">Built by developers, for developers.</div>
+</footer>
+
+<script>
+// ── Typewriter ─────────────────────────────────────────────────────
+const words = ['React Apps','Next.js Builds','Vite Projects','Static Sites','Vue.js Apps','Svelte Sites'];
+let wi = 0, ci = 0, deleting = false;
+const tw = document.getElementById('typewriter');
+
+function typeLoop() {
+  const word = words[wi];
+  if (!deleting) {
+    tw.textContent = word.slice(0, ++ci);
+    if (ci === word.length) { deleting = true; setTimeout(typeLoop, 1800); return; }
+    setTimeout(typeLoop, 80);
+  } else {
+    tw.textContent = word.slice(0, --ci);
+    if (ci === 0) { deleting = false; wi = (wi + 1) % words.length; setTimeout(typeLoop, 200); return; }
+    setTimeout(typeLoop, 45);
+  }
+}
+setTimeout(typeLoop, 800);
+
+// ── Terminal simulation ────────────────────────────────────────────
+const lines = [
+  { cls:'tl-out', text:'Enumerating objects: 12, done.' },
+  { cls:'tl-out', text:'Counting objects: 100% (12/12), done.' },
+  { cls:'tl-out', text:'To github.com/user/my-react-app.git' },
+  { cls:'tl-out', text:'   a1b2c3d..e4f5g6h  main -> main' },
+  { cls:'', text:'' },
+  { cls:'tl-step', text:'[DeployBoard] Starting local build for my-react-app' },
+  { cls:'tl-out', text:'Repo: https://github.com/user/my-react-app  Branch: main' },
+  { cls:'', text:'' },
+  { cls:'tl-step', text:'[Step 1/5] Cloning repository...' },
+  { cls:'tl-out', text:'$ git clone --depth=1 --branch=main ... /tmp/build-x7k' },
+  { cls:'tl-step', text:'[Step 2/5] Installing dependencies...' },
+  { cls:'tl-out', text:'added 312 packages in 8.4s' },
+  { cls:'tl-step', text:'[Step 3/5] Building project...' },
+  { cls:'tl-out', text:'vite v5.2.0 building for production...' },
+  { cls:'tl-out', text:'✓ 142 modules transformed.' },
+  { cls:'tl-out', text:'dist/index.html    0.52 kB' },
+  { cls:'tl-out', text:'dist/assets/index-BpT9TrxZ.js  184.23 kB' },
+  { cls:'tl-step', text:'[Step 4/5] Copying output to hosting...' },
+  { cls:'tl-step', text:'[Step 5/5] Cleaning up temporary files...' },
+  { cls:'', text:'' },
+  { cls:'tl-success', text:'✓ Deployment complete! Your site is live.' },
+  { cls:'tl-url',    text:'→ https://my-react-app.deployboard.app' },
+];
+
+const tb = document.getElementById('terminalBody');
+let li = 0;
+function addLine() {
+  if (li >= lines.length) return;
+  const { cls, text } = lines[li++];
+  const span = document.createElement('span');
+  span.className = 'tl ' + cls;
+  span.textContent = text;
+  tb.appendChild(span);
+  tb.scrollTop = tb.scrollHeight;
+  const delay = text === '' ? 100 : Math.random() * 120 + 60;
+  setTimeout(addLine, delay);
+}
+setTimeout(addLine, 1200);
+
+// ── How it works tabs ──────────────────────────────────────────────
+function selectStep(el, idx) {
+  document.querySelectorAll('.how-step').forEach(s => s.classList.remove('active'));
+  el.classList.add('active');
+  selectCodeTab(idx);
+}
+function selectCodeTab(idx) {
+  document.querySelectorAll('.code-tab').forEach((t,i) => t.classList.toggle('active', i===idx));
+  document.querySelectorAll('.code-panel').forEach((p,i) => p.classList.toggle('active', i===idx));
+}
+
+// ── Scroll reveal ──────────────────────────────────────────────────
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach((e, i) => {
+    if (e.isIntersecting) {
+      setTimeout(() => e.target.classList.add('visible'), i * 60);
+      observer.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.1 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// ── Snippet copy ───────────────────────────────────────────────────
+document.querySelectorAll('.snippet-copy').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const body = btn.closest('.snippet-card').querySelector('.snippet-body');
+    navigator.clipboard.writeText(body.innerText).then(() => {
+      const orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      btn.style.color = 'var(--green)';
+      setTimeout(() => { btn.textContent = orig; btn.style.color = ''; }, 1800);
+    });
+  });
+});
+</script>
+</div>
+
+<!-- ═══════════════════════════════════════════
+
+<!-- ═══════════════════════════════════════════
+     DASHBOARD VIEW
+═══════════════════════════════════════════ -->
+
+<div id="app" style="display:none;">
+
+<!-- ── Sidebar ──────────────────────────────────────────────────────────── -->
+<aside id="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-mark">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+    </div>
+    <span class="sidebar-logo-name">DeployBoard</span>
+    <!-- beta badge removed -->
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="sidebar-section">Overview</div>
+    <div class="nav-item active" onclick="showPage('dashboard',this)">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Dashboard
+    </div>
+    <div class="nav-item" onclick="showPage('projects',this)">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      Projects
+      <span class="nav-badge green" id="projectsCount">0</span>
+    </div>
+    <div class="nav-item" onclick="showPage('deployments',this)">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Deployments
+      <span class="nav-badge" id="deploymentsCount">0</span>
+    </div>
+
+    <div class="sidebar-section">Tools</div>
+    <div class="nav-item" onclick="showPage('new-deploy',this)">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      New Deployment
+    </div>
+    <div class="nav-item" onclick="showPage('logs',this)">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Live Logs
+    </div>
+    <div class="nav-item" onclick="showPage('env-manager',this)">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      Env Variables
+    </div>
+
+    <div class="sidebar-section">System</div>
+    <div class="nav-item" onclick="showPage('settings',this)">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Settings
+    </div>
+    <div class="nav-item" onclick="showPage('docs',this)">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Documentation
+    </div>
+  </nav>
+
+  <div class="sidebar-bottom">
+    <div class="user-chip" onclick="showPage('settings')">
+      <div class="user-avatar" id="sidebarAvatar">JG</div>
+      <div class="user-info">
+        <div class="user-name" id="sidebarName">James Good</div>
+        <div class="user-role">Free Plan</div>
+      </div>
+      <div class="user-chip-caret">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- ── Main ──────────────────────────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- Topbar -->
+  <div id="topbar">
+    <button class="menu-toggle" onclick="toggleSidebar()">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="topbar-breadcrumb" id="topbarBreadcrumb">
+      <span>DeployBoard</span>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      <span class="crumb-active" id="topbarPage">Dashboard</span>
+    </div>
+    <div class="topbar-right">
+      <button class="topbar-btn" onclick="showPage('new-deploy')">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span class="topbar-btn-label">New Deploy</span>
+      </button>
+      <button class="topbar-icon-btn notif-dot" title="Notifications">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      </button>
+      <div class="user-avatar" style="width:32px;height:32px;font-size:0.78rem;cursor:pointer;" id="topbarAvatar" onclick="showPage('settings')">JG</div>
+    </div>
+  </div>
+
+  <div id="content-area">
+
+    <!-- ════════ DASHBOARD PAGE ════════ -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header page-header-row">
+        <div>
+          <div class="page-title" id="dashGreeting">Good morning 👋</div>
+          <div class="page-subtitle">Here's what's happening with your deployments.</div>
+        </div>
+        <button class="btn btn-primary btn-lg" onclick="showPage('new-deploy')">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Deployment
+        </button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card" style="--accent-color:var(--primary);--icon-bg:rgba(59,130,246,0.1);--icon-border:rgba(59,130,246,0.2);--icon-color:var(--primary);">
+          <div class="stat-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+          <div class="stat-value" id="statProjects">0</div>
+          <div class="stat-label">Total Projects</div>
+          <div class="stat-delta up" id="statProjectsDelta">+0 this week</div>
+        </div>
+        <div class="stat-card" style="--accent-color:var(--green);--icon-bg:rgba(16,185,129,0.1);--icon-border:rgba(16,185,129,0.2);--icon-color:var(--green);">
+          <div class="stat-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div class="stat-value" id="statSuccess">0</div>
+          <div class="stat-label">Successful Deploys</div>
+          <div class="stat-delta up" id="statSuccessDelta">All time</div>
+        </div>
+        <div class="stat-card" style="--accent-color:var(--red);--icon-bg:rgba(239,68,68,0.1);--icon-border:rgba(239,68,68,0.2);--icon-color:var(--red);">
+          <div class="stat-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+          <div class="stat-value" id="statFailed">0</div>
+          <div class="stat-label">Failed Builds</div>
+          <div class="stat-delta down" id="statFailedDelta">All time</div>
+        </div>
+        <div class="stat-card" style="--accent-color:var(--cyan);--icon-bg:rgba(6,182,212,0.1);--icon-border:rgba(6,182,212,0.2);--icon-color:var(--cyan);">
+          <div class="stat-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+          <div class="stat-value" id="statAvgTime">—</div>
+          <div class="stat-label">Avg Build Time</div>
+          <div class="stat-delta up">seconds</div>
+        </div>
+      </div>
+
+      <!-- Quick actions -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px;" id="dashQuickActions">
+        <button class="dash-quick-btn" onclick="showPage('new-deploy')">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          New Deploy
+        </button>
+        <button class="dash-quick-btn" onclick="showPage('projects')">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          Projects
+        </button>
+        <button class="dash-quick-btn" onclick="showPage('logs')">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Live Logs
+        </button>
+        <button class="dash-quick-btn" onclick="showPage('env-manager')">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Env Vars
+        </button>
+        <button class="dash-quick-btn" onclick="showPage('settings')">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Settings
+        </button>
+      </div>
+
+      <div class="two-col">
+        <!-- Recent deployments -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Recent Deployments</div>
+              <div class="card-subtitle">Last 5 build runs</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="showPage('deployments')">View all</button>
+          </div>
+          <div id="dashRecentDeploys">
+            <div class="empty-state" style="padding:40px 20px;">
+              <div class="empty-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+              <div class="empty-title">No deployments yet</div>
+              <div class="empty-desc">Create your first deployment to see it here.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Activity + success rate -->
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <!-- Success Rate -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Build Health</div>
+              <div class="card-subtitle">Success vs failure rate</div>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <span style="font-size:0.8rem;color:var(--text-2);">Success rate</span>
+                <span style="font-family:var(--font-head);font-size:1.2rem;font-weight:800;color:var(--green);" id="dashSuccessRate">—</span>
+              </div>
+              <div class="progress-bar" style="height:8px;margin-bottom:12px;">
+                <div class="progress-fill" id="dashSuccessBar" style="width:0%;background:linear-gradient(90deg,var(--green),var(--cyan));"></div>
+              </div>
+              <div style="display:flex;gap:16px;margin-top:4px;">
+                <div style="display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--text-2);">
+                  <span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;"></span>
+                  <span id="dashSuccessCount">0 success</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--text-2);">
+                  <span style="width:8px;height:8px;border-radius:50%;background:var(--red);display:inline-block;"></span>
+                  <span id="dashFailCount">0 failed</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Activity</div>
+                <div class="card-subtitle">Platform events</div>
+              </div>
+            </div>
+            <div class="card-body" style="padding-top:8px;padding-bottom:8px;">
+              <div class="activity-feed" id="dashActivity">
+                <div class="activity-item">
+                  <div class="activity-avatar" style="background:rgba(59,130,246,0.12);color:var(--primary);">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/></svg>
+                  </div>
+                  <div class="activity-content">
+                    <div class="activity-text">Platform <strong>ready</strong> — connect your GitHub repo to start deploying</div>
+                    <div class="activity-time">Just now</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ PROJECTS PAGE ════════ -->
+    <div class="page" id="page-projects">
+      <div class="page-header page-header-row">
+        <div>
+          <div class="page-title">Projects</div>
+          <div class="page-subtitle">All your hosted projects and their live URLs.</div>
+        </div>
+        <button class="btn btn-primary btn-lg" onclick="showPage('new-deploy')">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Project
+        </button>
+      </div>
+      <div class="projects-grid" id="projectsGrid">
+        <div class="empty-state" style="grid-column:1/-1;">
+          <div class="empty-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+          <div class="empty-title">No projects yet</div>
+          <div class="empty-desc">Deploy your first GitHub project to get started. It only takes a minute.</div>
+          <button class="btn btn-primary" onclick="showPage('new-deploy')">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Create First Project
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ DEPLOYMENTS PAGE ════════ -->
+    <div class="page" id="page-deployments">
+      <div class="page-header">
+        <div class="page-title">Deployments</div>
+        <div class="page-subtitle">Full history of all build runs across all projects.</div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">All Build Runs</div>
+          <div class="card-actions">
+            <select class="select" style="width:auto;padding:6px 28px 6px 10px;font-size:0.78rem;" id="deployFilterStatus">
+              <option value="">All Status</option>
+              <option value="success">Success</option>
+              <option value="failed">Failed</option>
+              <option value="building">Building</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrap" id="deploymentsTable">
+          <div class="empty-state">
+            <div class="empty-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+            <div class="empty-title">No deployments yet</div>
+            <div class="empty-desc">Your build history will appear here once you run your first deployment.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ NEW DEPLOY PAGE ════════ -->
+    <div class="page" id="page-new-deploy">
+      <div class="page-header">
+        <div class="back-link" onclick="showPage('projects')">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Back to Projects
+        </div>
+        <div class="page-title">New Deployment</div>
+        <div class="page-subtitle">Connect a GitHub repository and configure your build settings.</div>
+      </div>
+
+      <div class="two-col" style="align-items:start;">
+        <!-- Left: form -->
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Project Details</div>
+                <div class="card-subtitle">Basic configuration for this deployment</div>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="field">
+                <label class="field-label">Project Name</label>
+                <input class="input" id="deployProjectName" placeholder="my-awesome-app" autocomplete="off">
+                <div class="field-hint">Used as part of your subdomain. Lowercase letters, numbers and hyphens only.</div>
+              </div>
+              <div class="field">
+                <label class="field-label">Subdomain</label>
+                <div class="input-group">
+                  <input class="input input-mono" id="deploySubdomain" placeholder="my-app" autocomplete="off" oninput="updateSubdomainPreview()">
+                  <span style="display:flex;align-items:center;padding:0 12px;background:rgba(99,179,237,0.05);border:1.5px solid var(--border);border-left:none;border-radius:0 8px 8px 0;font-family:var(--font-mono);font-size:0.8rem;color:var(--text-3);white-space:nowrap;" id="domainSuffix">.deployboard.app</span>
+                </div>
+                <div class="field-hint">Preview: <span class="td-mono" id="subdomainPreview">—</span></div>
+              </div>
+              <div class="field">
+                <label class="field-label">GitHub Repository URL</label>
+                <input class="input input-mono" id="deployRepoUrl" placeholder="https://github.com/username/repo" autocomplete="off">
+                <div class="field-hint">Public or private repos supported. For private repos ensure your GitHub token is configured.</div>
+              </div>
+              <div class="field">
+                <label class="field-label">Branch</label>
+                <input class="input input-mono" id="deployBranch" placeholder="main" value="main" autocomplete="off">
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Build Settings</div>
+                <div class="card-subtitle">Commands to install and build your project</div>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="deploy-form-grid">
+                <div class="field">
+                  <label class="field-label">Install Command</label>
+                  <input class="input input-mono" id="deployInstallCmd" value="npm install" placeholder="npm install">
+                </div>
+                <div class="field">
+                  <label class="field-label">Build Command</label>
+                  <input class="input input-mono" id="deployBuildCmd" value="npm run build" placeholder="npm run build">
+                </div>
+              </div>
+              <div class="field">
+                <label class="field-label">Start Command <span style="color:var(--text-3);font-weight:400;font-size:0.78rem;">(optional)</span></label>
+                <input class="input input-mono" id="deployStartCmd" value="" placeholder="npm start  /  node server.js  /  yarn start">
+                <div class="field-hint">The command to run your app as a server (e.g. <code style="font-family:var(--font-mono);">npm start</code>, <code style="font-family:var(--font-mono);">node server.js</code>). Saved for reference — not executed during static builds.</div>
+              </div>
+              <div class="field">
+                <label class="field-label">Output Directory</label>
+                <input class="input input-mono" id="deployOutputDir" value="dist" placeholder="dist">
+                <div class="field-hint">The folder your build command outputs to (e.g. dist, build, out, public).</div>
+              </div>
+              <div class="field">
+                <label class="field-label">Node.js Version</label>
+                <select class="select" id="deployNodeVersion">
+                  <option value="18">Node.js 18 LTS (Recommended)</option>
+                  <option value="20">Node.js 20 LTS</option>
+                  <option value="16">Node.js 16</option>
+                  <option value="14">Node.js 14</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Environment Variables</div>
+                <div class="card-subtitle">Injected into the build environment</div>
+              </div>
+              <button class="btn btn-ghost btn-sm" onclick="addEnvRow()">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Variable
+              </button>
+            </div>
+            <div class="card-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:8px;">
+                <div style="font-size:0.72rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.08em;">Name</div>
+                <div style="font-size:0.72rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.08em;">Value</div>
+                <div></div>
+              </div>
+              <div id="envVarsContainer">
+                <div class="empty-state" style="padding:24px 0;" id="envEmptyState">
+                  <div style="font-size:0.82rem;color:var(--text-3);">No environment variables added.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: summary + deploy btn -->
+        <div style="display:flex;flex-direction:column;gap:16px;position:sticky;top:0;">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Deployment Summary</div>
+            </div>
+            <div class="card-body" style="display:flex;flex-direction:column;gap:12px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.82rem;">
+                <span style="color:var(--text-2);">Project</span>
+                <span style="color:var(--text);font-weight:600;" id="summaryName">—</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.82rem;">
+                <span style="color:var(--text-2);">URL</span>
+                <span class="td-mono" style="font-size:0.75rem;" id="summaryUrl">—</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.82rem;">
+                <span style="color:var(--text-2);">Branch</span>
+                <span class="td-mono" style="font-size:0.75rem;" id="summaryBranch">main</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.82rem;">
+                <span style="color:var(--text-2);">Node.js</span>
+                <span style="color:var(--text);font-weight:600;" id="summaryNode">18 LTS</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.82rem;">
+                <span style="color:var(--text-2);">Mode</span>
+                <span class="badge badge-success" id="summaryMode">Local</span>
+              </div>
+              <div class="divider" style="margin:4px 0;"></div>
+              <button class="btn btn-primary btn-lg" style="width:100%;" onclick="startDeployment()" id="deployBtn">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+                Deploy Now
+              </button>
+              <div style="font-size:0.72rem;color:var(--text-3);text-align:center;line-height:1.4;">
+                Deployment will start immediately. Build logs will stream in real-time.
+              </div>
+            </div>
+          </div>
+
+          <div class="alert alert-info">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <div>Running in <strong>Local Mode</strong>. Set <code style="font-family:var(--font-mono);background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:4px;">RUNNER=docker</code> in your environment to enable Docker builds.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ LIVE LOGS PAGE ════════ -->
+    <div class="page" id="page-logs">
+      <div class="page-header">
+        <div class="back-link" onclick="showPage('deployments')">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Back to Deployments
+        </div>
+        <div class="page-header-row">
+          <div>
+            <div class="page-title">Live Logs</div>
+            <div class="page-subtitle">Real-time build output streamed via Socket.io</div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button class="btn btn-ghost" onclick="clearTerminal()">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+              Clear
+            </button>
+            <button class="btn btn-ghost" onclick="downloadLogs()" id="downloadLogsBtn">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style="width:100%;margin-bottom:0;">
+      <div style="width:100%;">
+          <div class="terminal-topbar">
+            <div class="term-dots">
+              <div class="term-dot red"></div>
+              <div class="term-dot yellow"></div>
+              <div class="term-dot green"></div>
+            </div>
+            <span class="term-title" id="termTitle">No active build</span>
+            <div class="term-status" id="termStatus">
+              <span class="badge badge-idle"><span class="badge-dot"></span>Idle</span>
+            </div>
+          </div>
+          <div class="terminal-wrap">
+            <div id="terminal"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Build steps progress -->
+      <div class="card" style="margin-top:20px;" id="buildStepsCard">
+        <div class="card-header">
+          <div class="card-title">Build Progress</div>
+          <div id="buildOverallStatus"></div>
+        </div>
+        <div class="card-body">
+          <div class="deploy-steps" id="buildSteps">
+            <div class="deploy-step">
+              <div class="step-icon" id="step-clone">1</div>
+              <div class="step-body">
+                <div class="step-name">Clone Repository</div>
+                <div class="step-desc">Fetching source code from GitHub</div>
+              </div>
+            </div>
+            <div class="deploy-step">
+              <div class="step-icon" id="step-install">2</div>
+              <div class="step-body">
+                <div class="step-name">Install Dependencies</div>
+                <div class="step-desc">Running install command</div>
+              </div>
+            </div>
+            <div class="deploy-step">
+              <div class="step-icon" id="step-build">3</div>
+              <div class="step-body">
+                <div class="step-name">Build Project</div>
+                <div class="step-desc">Compiling and bundling assets</div>
+              </div>
+            </div>
+            <div class="deploy-step">
+              <div class="step-icon" id="step-copy">4</div>
+              <div class="step-body">
+                <div class="step-name">Copy to Hosting</div>
+                <div class="step-desc">Moving build output to static folder</div>
+              </div>
+            </div>
+            <div class="deploy-step">
+              <div class="step-icon" id="step-cleanup">5</div>
+              <div class="step-body">
+                <div class="step-name">Cleanup</div>
+                <div class="step-desc">Removing temporary build files</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ ENV MANAGER PAGE ════════ -->
+    <div class="page" id="page-env-manager">
+      <div class="page-header">
+        <div class="page-title">Environment Variables</div>
+        <div class="page-subtitle">Manage environment variables per project. These are injected at build time.</div>
+      </div>
+
+      <div class="two-col" style="align-items:start;">
+        <div>
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Select Project</div>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="field">
+                <label class="field-label">Project</label>
+                <select class="select" id="envProjectSelect" onchange="loadEnvForProject()">
+                  <option value="">— Choose a project —</option>
+                </select>
+              </div>
+              <div id="envVarsDisplay">
+                <div class="empty-state" style="padding:30px 0;">
+                  <div style="font-size:0.82rem;color:var(--text-3);">Select a project to manage its environment variables.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Add / Edit Variable</div>
+            </div>
+            <div class="card-body">
+              <div class="field">
+                <label class="field-label">Key</label>
+                <input class="input input-mono" id="envKey" placeholder="API_KEY" autocomplete="off">
+              </div>
+              <div class="field">
+                <label class="field-label">Value</label>
+                <input class="input input-mono" id="envVal" placeholder="your-secret-value" autocomplete="off">
+              </div>
+              <button class="btn btn-primary" style="width:100%;" onclick="saveEnvVar()">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Save Variable
+              </button>
+            </div>
+          </div>
+          <div class="alert alert-warning" style="margin-top:16px;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <div>Environment variables are stored locally in this session. In production, connect your database to persist them.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ SETTINGS PAGE ════════ -->
+    <div class="page" id="page-settings">
+      <div class="page-header">
+        <div class="page-title">Settings</div>
+        <div class="page-subtitle">Configure your platform, integrations and account details.</div>
+      </div>
+
+      <div class="tabs" id="settingsTabs">
+        <div class="tab active" onclick="switchSettingsTab('general',this)">General</div>
+        <div class="tab" onclick="switchSettingsTab('github',this)">GitHub</div>
+        <div class="tab" onclick="switchSettingsTab('domain',this)">Domain</div>
+        <div class="tab" onclick="switchSettingsTab('account',this)">Account</div>
+      </div>
+
+      <div id="settingsTabGeneral">
+        <div class="two-col" style="align-items:start;">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Platform Settings</div></div>
+            <div class="card-body">
+              <div class="field">
+                <label class="field-label">Platform Name</label>
+                <input class="input" id="settingsPlatformName" value="DeployBoard">
+              </div>
+              <div class="field">
+                <label class="field-label">Build Runner Mode</label>
+                <select class="select" id="settingsRunnerMode">
+                  <option value="local">Local Mode (for Render / testing)</option>
+                  <option value="docker">Docker Mode (for VPS)</option>
+                </select>
+                <div class="field-hint">Local mode uses child_process on the host. Docker mode spawns isolated containers.</div>
+              </div>
+              <div class="field">
+                <label class="field-label">Sites Base Directory</label>
+                <input class="input input-mono" id="settingsSitesDir" value="/var/www/user-sites" placeholder="/var/www/user-sites">
+                <div class="field-hint">Where built sites are served from. Must match your Nginx config.</div>
+              </div>
+              <div class="field">
+                <label class="field-label">Temp Build Directory</label>
+                <input class="input input-mono" id="settingsTmpDir" value="/tmp/deployboard-builds" placeholder="/tmp/deployboard-builds">
+                <div class="field-hint">Temporary directory for cloning repos. Cleaned up after each build.</div>
+              </div>
+              <button class="btn btn-primary" onclick="saveSettings()">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Save Settings
+              </button>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div class="card">
+              <div class="card-header"><div class="card-title">System Status</div></div>
+              <div class="card-body" style="display:flex;flex-direction:column;gap:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <span style="font-size:0.82rem;color:var(--text-2);">API Server</span>
+                  <span class="badge badge-success" id="statusApi"><span class="badge-dot"></span>Online</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <span style="font-size:0.82rem;color:var(--text-2);">Socket.io</span>
+                  <span class="badge" id="statusSocket"><span class="badge-dot"></span>Connecting…</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <span style="font-size:0.82rem;color:var(--text-2);">Docker</span>
+                  <span class="badge badge-pending" id="statusDocker"><span class="badge-dot"></span>Not checked</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <span style="font-size:0.82rem;color:var(--text-2);">Database</span>
+                  <span class="badge" id="statusDb"><span class="badge-dot"></span>Checking…</span>
+                </div>
+                <div class="divider" style="margin:4px 0;"></div>
+                <button class="btn btn-ghost btn-sm" style="width:100%;" onclick="checkSystemStatus()">Refresh Status</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="settingsTabGithub" style="display:none;">
+        <div class="two-col" style="align-items:start;">
+          <div class="card">
+            <div class="card-header"><div class="card-title">GitHub Integration</div></div>
+            <div class="card-body">
+              <div class="alert alert-info" style="margin-bottom:16px;">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <div>Required for cloning private repositories. Generate a token at <strong>GitHub → Settings → Developer Settings → Personal Access Tokens (Classic)</strong>. Grant <code style="font-family:var(--font-mono);background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;">repo</code> scope.</div>
+              </div>
+              <div class="field">
+                <label class="field-label">Personal Access Token</label>
+                <input class="input input-mono" id="settingsGhToken" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+                <div class="field-hint">Stored in your server's environment as <code style="font-family:var(--font-mono);">GITHUB_TOKEN</code>. Never exposed to the browser.</div>
+              </div>
+              <div class="field">
+                <label class="field-label">Default GitHub Username</label>
+                <input class="input" id="settingsGhUser" placeholder="your-github-username">
+              </div>
+              <button class="btn btn-primary" onclick="saveGithubSettings()">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Save GitHub Settings
+              </button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Connected Account</div></div>
+            <div class="card-body">
+              <div id="githubConnectedInfo">
+                <div class="empty-state" style="padding:30px 0;">
+                  <div style="font-size:0.82rem;color:var(--text-3);">No GitHub account connected yet.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="settingsTabDomain" style="display:none;">
+        <div class="two-col" style="align-items:start;">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Domain Configuration</div></div>
+            <div class="card-body">
+              <div class="field">
+                <label class="field-label">Base Domain</label>
+                <input class="input input-mono" id="settingsBaseDomain" value="deployboard.app" placeholder="yourdomain.com">
+                <div class="field-hint">All user sites will be hosted at <code style="font-family:var(--font-mono);">[subdomain].yourdomain.com</code></div>
+              </div>
+              <button class="btn btn-primary" onclick="saveDomainSettings()">Save Domain Settings</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Nginx Config</div></div>
+            <div class="card-body">
+              <div style="font-size:0.8rem;color:var(--text-2);margin-bottom:12px;">Copy this Nginx server block to <code style="font-family:var(--font-mono);background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:4px;">/etc/nginx/sites-available/deployboard</code></div>
+              <div class="code-block" id="nginxConfigPreview">
+<span class="ck">server</span> {
+  <span class="ck">listen</span> <span class="cn">80</span>;
+  <span class="ck">server_name</span> ~<span class="cs">^(?&lt;subdomain&gt;.+)\.deployboard\.app$</span>;
+  
+  <span class="ck">location</span> / {
+    <span class="ck">root</span> <span class="cs">/var/www/user-sites/$subdomain/dist</span>;
+    <span class="ck">index</span> index.html;
+    <span class="ck">try_files</span> $uri $uri/ /index.html;
+  }
+}
+              </div>
+              <button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="copyNginxConfig()">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Copy Config
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="settingsTabAccount" style="display:none;">
+        <div class="two-col" style="align-items:start;">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Account Details</div></div>
+            <div class="card-body">
+              <div class="field">
+                <label class="field-label">Display Name</label>
+                <input class="input" id="settingsName" placeholder="Your Name">
+              </div>
+              <div class="field">
+                <label class="field-label">Email Address</label>
+                <input class="input" id="settingsEmail" type="email" placeholder="you@example.com">
+              </div>
+              <button class="btn btn-primary" onclick="saveAccountSettings()">Save Account</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Danger Zone</div></div>
+            <div class="card-body" style="display:flex;flex-direction:column;gap:12px;">
+              <div style="font-size:0.82rem;color:var(--text-2);line-height:1.5;">These actions are irreversible. Please be certain before proceeding.</div>
+              <button class="btn btn-danger" onclick="confirmDeleteAllProjects()">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                Delete All Projects & Deployments
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ DOCS PAGE ════════ -->
+    <div class="page" id="page-docs">
+      <div class="page-header">
+        <div class="page-title">Documentation</div>
+        <div class="page-subtitle">Setup guides, API reference and architecture overview.</div>
+      </div>
+
+      <div class="two-col" style="align-items:start;">
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Quick Start</div></div>
+            <div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
+              <div>
+                <div style="font-weight:700;font-size:0.85rem;color:var(--text);margin-bottom:6px;">1. Clone & Install</div>
+                <div class="code-block">git clone https://github.com/your-org/deployboard
+cd deployboard
+npm install</div>
+              </div>
+              <div>
+                <div style="font-weight:700;font-size:0.85rem;color:var(--text);margin-bottom:6px;">2. Configure Environment</div>
+                <div class="code-block">cp .env.example .env
+<span class="ck"># Edit .env with your settings</span>
+<span class="cs">PORT</span>=3001
+<span class="cs">RUNNER</span>=local
+<span class="cs">SITES_DIR</span>=/var/www/user-sites
+<span class="cs">TMP_DIR</span>=/tmp/deployboard-builds
+<span class="cs">MONGODB_URI</span>=mongodb://localhost:27017/deployboard
+<span class="cs">GITHUB_TOKEN</span>=ghp_your_token_here</div>
+              </div>
+              <div>
+                <div style="font-weight:700;font-size:0.85rem;color:var(--text);margin-bottom:6px;">3. Start the Server</div>
+                <div class="code-block">npm start
+<span class="ck"># or for development:</span>
+npm run dev</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><div class="card-title">Docker Mode (VPS)</div></div>
+            <div class="card-body" style="display:flex;flex-direction:column;gap:12px;">
+              <div class="alert alert-warning">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <div>Docker mode requires a VPS with Docker installed. Not supported on Render's free tier.</div>
+              </div>
+              <div>
+                <div style="font-weight:700;font-size:0.85rem;color:var(--text);margin-bottom:6px;">Enable Docker Mode</div>
+                <div class="code-block"><span class="ck"># Add Docker socket permissions</span>
+sudo usermod -aG docker $USER
+
+<span class="ck"># Set runner mode</span>
+<span class="cs">RUNNER</span>=docker</div>
+              </div>
+              <div>
+                <div style="font-weight:700;font-size:0.85rem;color:var(--text);margin-bottom:6px;">Build with Docker Compose</div>
+                <div class="code-block">docker-compose up -d</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Architecture</div></div>
+            <div class="card-body">
+              <div style="display:flex;flex-direction:column;gap:10px;font-size:0.82rem;color:var(--text-2);">
+                <div style="display:flex;align-items:flex-start;gap:10px;">
+                  <div style="width:28px;height:28px;border-radius:7px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" style="width:13px;height:13px;"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>
+                  </div>
+                  <div><strong style="color:var(--text);">Frontend (this dashboard)</strong> — Pure HTML/CSS/JS with Xterm.js for the terminal and Socket.io for real-time log streaming.</div>
+                </div>
+                <div style="display:flex;align-items:flex-start;gap:10px;">
+                  <div style="width:28px;height:28px;border-radius:7px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" style="width:13px;height:13px;"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/></svg>
+                  </div>
+                  <div><strong style="color:var(--text);">Orchestrator (server.js)</strong> — Express.js API that receives deploy requests, manages the queue, and streams logs via Socket.io.</div>
+                </div>
+                <div style="display:flex;align-items:flex-start;gap:10px;">
+                  <div style="width:28px;height:28px;border-radius:7px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2" style="width:13px;height:13px;"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                  </div>
+                  <div><strong style="color:var(--text);">buildRunner.js</strong> — Abstraction layer that switches between Local (child_process) and Docker mode automatically based on RUNNER env var.</div>
+                </div>
+                <div style="display:flex;align-items:flex-start;gap:10px;">
+                  <div style="width:28px;height:28px;border-radius:7px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2" style="width:13px;height:13px;"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                  </div>
+                  <div><strong style="color:var(--text);">Nginx</strong> — Wildcard subdomain routing maps <code style="font-family:var(--font-mono);background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;">*.domain.com</code> to <code style="font-family:var(--font-mono);background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;">/var/www/user-sites/$subdomain/dist</code></div>
+                </div>
+                <div style="display:flex;align-items:flex-start;gap:10px;">
+                  <div style="width:28px;height:28px;border-radius:7px;background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" style="width:13px;height:13px;"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                  </div>
+                  <div><strong style="color:var(--text);">MongoDB</strong> — Stores project configurations, deployment history and environment variables.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><div class="card-title">API Reference</div></div>
+            <div class="card-body">
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <div class="api-row">
+                  <span class="api-method" style="background:var(--green);">POST</span>
+                  <span class="td-mono">/api/deploy</span>
+                  <span class="api-desc">Trigger a deployment</span>
+                </div>
+                <div class="api-row">
+                  <span class="api-method" style="background:var(--primary);">GET</span>
+                  <span class="td-mono">/api/projects</span>
+                  <span class="api-desc">List all projects</span>
+                </div>
+                <div class="api-row">
+                  <span class="api-method" style="background:var(--primary);">GET</span>
+                  <span class="td-mono">/api/projects/:id</span>
+                  <span class="api-desc">Get project details</span>
+                </div>
+                <div class="api-row">
+                  <span class="api-method" style="background:var(--amber);">PUT</span>
+                  <span class="td-mono">/api/projects/:id</span>
+                  <span class="api-desc">Update project</span>
+                </div>
+                <div class="api-row">
+                  <span class="api-method" style="background:var(--red);">DELETE</span>
+                  <span class="td-mono">/api/projects/:id</span>
+                  <span class="api-desc">Delete project</span>
+                </div>
+                <div class="api-row">
+                  <span class="api-method" style="background:var(--primary);">GET</span>
+                  <span class="td-mono">/api/deployments</span>
+                  <span class="api-desc">Deployment history</span>
+                </div>
+                <div class="api-row">
+                  <span class="api-method" style="background:var(--primary);">GET</span>
+                  <span class="td-mono">/api/health</span>
+                  <span class="api-desc">Health check</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ PROJECT DETAIL PAGE ════════ -->
+    <div class="page" id="page-project-detail">
+      <div class="back-link" onclick="showPage('projects')">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Back to Projects
+      </div>
+      <div id="projectDetailContent"></div>
+    </div>
+
+  </div><!-- /content-area -->
+</div><!-- /main -->
+</div><!-- /app -->
+
+<!-- ── Delete confirm modal ──────────────────────────────────────────────── -->
+<div class="modal-backdrop" id="deleteModal">
+  <div class="modal" style="width:min(96vw,420px);">
+    <div class="modal-header">
+      <div class="modal-icon" style="background:rgba(239,68,68,0.1);">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+      </div>
+      <div>
+        <div class="modal-title">Delete Project</div>
+        <div class="modal-subtitle" id="deleteModalMsg">This action cannot be undone.</div>
+      </div>
+      <button class="modal-close" onclick="closeDeleteModal()"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmDelete()">Delete Project</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════
+const API = window.location.origin; // same-origin API
+let projects     = JSON.parse(localStorage.getItem('db_projects')     || '[]');
+let deployments  = JSON.parse(localStorage.getItem('db_deployments')  || '[]');
+let envStore     = JSON.parse(localStorage.getItem('db_envstore')     || '{}');
+let settings     = JSON.parse(localStorage.getItem('db_settings')     || '{}');
+let envRows      = []; // current deploy form env rows
+let currentPage  = 'dashboard';
+let socket       = null;
+let term         = null;
+let fitAddon     = null;
+let logBuffer    = [];
+let pendingDelete= null;
+let activeBuildId= null;
+
+// ══════════════════════════════════════════════════════════════════
+// SAVE / LOAD
+// ══════════════════════════════════════════════════════════════════
+function save() {
+  localStorage.setItem('db_projects',    JSON.stringify(projects));
+  localStorage.setItem('db_deployments', JSON.stringify(deployments));
+  localStorage.setItem('db_envstore',    JSON.stringify(envStore));
+  localStorage.setItem('db_settings',    JSON.stringify(settings));
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PAGE ROUTING
+// ══════════════════════════════════════════════════════════════════
+const PAGE_LABELS = {
+  dashboard:'Dashboard', projects:'Projects', deployments:'Deployments',
+  'new-deploy':'New Deployment', logs:'Live Logs', 'env-manager':'Env Variables',
+  settings:'Settings', docs:'Documentation', 'project-detail':'Project'
+};
+function showPage(id, navEl) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const page = document.getElementById('page-' + id);
+  if (page) page.classList.add('active');
+  currentPage = id;
+
+  // Breadcrumb
+  document.getElementById('topbarPage').textContent = PAGE_LABELS[id] || id;
+
+  // Nav active state
+  if (navEl) {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    navEl.classList.add('active');
+  } else {
+    document.querySelectorAll('.nav-item').forEach(n => {
+      n.classList.toggle('active', n.textContent.trim().toLowerCase().includes((PAGE_LABELS[id]||id).toLowerCase().split(' ')[0]));
+    });
+  }
+
+  // Page-specific setup
+  if (id === 'projects')      renderProjects();
+  if (id === 'deployments')   renderDeployments();
+  if (id === 'dashboard')     renderDashboard();
+  if (id === 'env-manager')   renderEnvManager();
+  if (id === 'logs')          initTerminal();
+  if (id === 'settings')      loadSettingsUI();
+  if (id === 'new-deploy')    initDeployForm();
+
+  closeSidebar();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SIDEBAR
+// ══════════════════════════════════════════════════════════════════
+function toggleSidebar() {
+  const s = document.getElementById('sidebar');
+  const o = document.getElementById('sidebarOverlay');
+  const open = s.classList.toggle('open');
+  o.classList.toggle('open', open);
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════════════════════
+function toast(msg, type='info', duration=3500) {
+  const icons = {
+    success:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+    error:  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+    info:   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+  };
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.innerHTML = (icons[type]||icons.info) + '<span>' + msg + '</span>';
+  document.getElementById('toast-wrap').appendChild(t);
+  setTimeout(() => {
+    t.style.animation = 'fadeOut 0.3s ease forwards';
+    setTimeout(() => t.remove(), 300);
+  }, duration);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════════════════════════
+function renderDashboard() {
+  const total   = projects.length;
+  const success = deployments.filter(d => d.status === 'success').length;
+  const failed  = deployments.filter(d => d.status === 'failed').length;
+  const times   = deployments.filter(d => d.duration).map(d => d.duration);
+  const avgTime = times.length ? Math.round(times.reduce((a,b)=>a+b,0)/times.length) : null;
+
+  document.getElementById('statProjects').textContent   = total;
+  document.getElementById('statSuccess').textContent    = success;
+  document.getElementById('statFailed').textContent     = failed;
+  document.getElementById('statAvgTime').textContent    = avgTime ? avgTime + 's' : '—';
+  document.getElementById('projectsCount').textContent  = total;
+  document.getElementById('deploymentsCount').textContent = deployments.length;
+
+  // Greeting
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? 'Good morning 👋' : hour < 18 ? 'Good afternoon 👋' : 'Good evening 👋';
+  const greetEl = document.getElementById('dashGreeting');
+  if (greetEl) greetEl.textContent = greet;
+
+  // Success rate
+  const totalFinished = success + failed;
+  const rateEl = document.getElementById('dashSuccessRate');
+  const barEl  = document.getElementById('dashSuccessBar');
+  const scEl   = document.getElementById('dashSuccessCount');
+  const fcEl   = document.getElementById('dashFailCount');
+  if (rateEl) {
+    const rate = totalFinished > 0 ? Math.round((success / totalFinished) * 100) : null;
+    rateEl.textContent = rate !== null ? rate + '%' : '—';
+    if (barEl) barEl.style.width = (rate || 0) + '%';
+    if (scEl)  scEl.textContent  = success + ' success';
+    if (fcEl)  fcEl.textContent  = failed + ' failed';
+  }
+
+  // Recent deploys
+  const recent = [...deployments].reverse().slice(0,5);
+  const rc = document.getElementById('dashRecentDeploys');
+  if (!recent.length) {
+    rc.innerHTML = `<div class="empty-state" style="padding:40px 20px;">
+      <div class="empty-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+      <div class="empty-title">No deployments yet</div>
+      <div class="empty-desc">Create your first deployment to see it here.</div>
+    </div>`;
+    return;
+  }
+  rc.innerHTML = `<table><thead><tr>
+    <th>Project</th><th>Status</th><th>Duration</th><th>When</th>
+  </tr></thead><tbody>` + recent.map(d => `
+    <tr onclick="showPage('logs')" style="cursor:pointer;">
+      <td class="td-main">${escHtml(d.projectName||'—')}</td>
+      <td>${statusBadge(d.status)}</td>
+      <td>${d.duration ? d.duration+'s' : '—'}</td>
+      <td>${relTime(d.startedAt)}</td>
+    </tr>`).join('') + '</tbody></table>';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PROJECTS
+// ══════════════════════════════════════════════════════════════════
+function renderProjects() {
+  const g = document.getElementById('projectsGrid');
+  if (!projects.length) {
+    g.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">
+      <div class="empty-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+      <div class="empty-title">No projects yet</div>
+      <div class="empty-desc">Deploy your first GitHub project to get started.</div>
+      <button class="btn btn-primary" onclick="showPage('new-deploy')">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Create First Project
+      </button>
+    </div>`;
+    return;
+  }
+  g.innerHTML = projects.map(p => {
+    const lastDeploy = [...deployments].reverse().find(d => d.projectId === p.id);
+    const iconBg = ['rgba(59,130,246,0.12)','rgba(16,185,129,0.1)','rgba(139,92,246,0.1)','rgba(245,158,11,0.1)','rgba(6,182,212,0.1)'];
+    const iconColor = ['var(--primary)','var(--green)','var(--purple)','var(--amber)','var(--cyan)'];
+    const idx = p.id.charCodeAt(0) % 5;
+    return `<div class="project-card">
+      <div class="project-card-header">
+        <div class="project-icon" style="background:${iconBg[idx]};border:1px solid rgba(255,255,255,0.05);">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${iconColor[idx]}" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <div style="min-width:0;">
+          <div class="project-name">${escHtml(p.name)}</div>
+          <div class="project-url">${escHtml(p.subdomain)}.${escHtml(settings.baseDomain||'deployboard.app')}</div>
+        </div>
+        ${lastDeploy ? statusBadge(lastDeploy.status) : '<span class="badge badge-idle"><span class="badge-dot"></span>Never deployed</span>'}
+      </div>
+      <div class="project-meta">
+        <div class="project-meta-item">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          ${escHtml(p.repoUrl ? p.repoUrl.replace('https://github.com/','') : '—')}
+        </div>
+        <div class="project-meta-item">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/></svg>
+          ${lastDeploy ? relTime(lastDeploy.startedAt) : 'Never'}
+        </div>
+      </div>
+      <div class="project-actions">
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();redeploy('${p.id}')">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Redeploy
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();showProjectDetail('${p.id}')">View</button>
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();openDeleteModal('${p.id}')">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// DEPLOYMENTS TABLE
+// ══════════════════════════════════════════════════════════════════
+function renderDeployments() {
+  const filter = document.getElementById('deployFilterStatus')?.value || '';
+  const filtered = filter ? deployments.filter(d => d.status === filter) : deployments;
+  const reversed = [...filtered].reverse();
+  const wrap = document.getElementById('deploymentsTable');
+  if (!reversed.length) {
+    wrap.innerHTML = `<div class="empty-state">
+      <div class="empty-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+      <div class="empty-title">No deployments${filter ? ' with status: '+filter : ''}</div>
+      <div class="empty-desc">Your build history will appear here once you run your first deployment.</div>
+    </div>`;
+    return;
+  }
+  wrap.innerHTML = `<table><thead><tr>
+    <th>ID</th><th>Project</th><th>Branch</th><th>Status</th><th>Duration</th><th>Started</th><th>Actions</th>
+  </tr></thead><tbody>` + reversed.map(d => `
+    <tr>
+      <td class="td-mono">${d.id.slice(-8)}</td>
+      <td class="td-main">${escHtml(d.projectName||'—')}</td>
+      <td class="td-mono">${escHtml(d.branch||'main')}</td>
+      <td>${statusBadge(d.status)}</td>
+      <td>${d.duration ? d.duration+'s' : '—'}</td>
+      <td>${relTime(d.startedAt)}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="viewDeployLogs('${d.id}')">View Logs</button>
+      </td>
+    </tr>`).join('') + '</tbody></table>';
+}
+document.getElementById('deployFilterStatus')?.addEventListener('change', renderDeployments);
+
+function viewDeployLogs(deployId) {
+  activeBuildId = deployId;
+  showPage('logs');
+  const d = deployments.find(x => x.id === deployId);
+  if (d && d.logs) {
+    if (term) {
+      term.clear();
+      d.logs.forEach(l => term.writeln(l));
+    }
+    document.getElementById('termTitle').textContent = d.projectName + ' · ' + d.id.slice(-8);
+    document.getElementById('termStatus').innerHTML = statusBadge(d.status);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// NEW DEPLOY FORM
+// ══════════════════════════════════════════════════════════════════
+function initDeployForm() {
+  updateSubdomainPreview();
+  updateSummary();
+  // Watch inputs
+  ['deployProjectName','deploySubdomain','deployBranch','deployNodeVersion'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', updateSummary);
+  });
+  document.getElementById('deployProjectName')?.addEventListener('input', function() {
+    const sub = document.getElementById('deploySubdomain');
+    if (sub && !sub.dataset.manuallyEdited) {
+      sub.value = this.value.toLowerCase().replace(/[^a-z0-9-]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+      updateSubdomainPreview();
+      updateSummary();
+    }
+  });
+  document.getElementById('deploySubdomain')?.addEventListener('input', function() {
+    this.dataset.manuallyEdited = '1';
+    updateSubdomainPreview();
+    updateSummary();
+  });
+}
+function updateSubdomainPreview() {
+  const sub  = (document.getElementById('deploySubdomain')?.value||'').trim();
+  const base = settings.baseDomain || 'deployboard.app';
+  document.getElementById('subdomainPreview').textContent = sub ? sub + '.' + base : '—';
+}
+function updateSummary() {
+  const name   = document.getElementById('deployProjectName')?.value || '—';
+  const sub    = document.getElementById('deploySubdomain')?.value   || '—';
+  const branch = document.getElementById('deployBranch')?.value      || 'main';
+  const node   = document.getElementById('deployNodeVersion')?.value || '18';
+  const base   = settings.baseDomain || 'deployboard.app';
+  document.getElementById('summaryName').textContent   = name;
+  document.getElementById('summaryUrl').textContent    = sub !== '—' ? sub + '.' + base : '—';
+  document.getElementById('summaryBranch').textContent = branch;
+  document.getElementById('summaryNode').textContent   = 'Node ' + node;
+}
+
+// Env vars in deploy form
+function addEnvRow(key='', value='') {
+  const empty = document.getElementById('envEmptyState');
+  if (empty) empty.style.display = 'none';
+  const rowId = 'envrow_' + Date.now();
+  envRows.push(rowId);
+  const row = document.createElement('div');
+  row.className = 'env-row'; row.id = rowId;
+  row.innerHTML = `
+    <input class="input input-mono" placeholder="VAR_NAME" value="${escHtml(key)}" autocomplete="off">
+    <input class="input input-mono" placeholder="value" value="${escHtml(value)}" autocomplete="off">
+    <button class="btn btn-icon btn-ghost" onclick="removeEnvRow('${rowId}')">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>`;
+  document.getElementById('envVarsContainer').appendChild(row);
+}
+function removeEnvRow(id) {
+  document.getElementById(id)?.remove();
+  envRows = envRows.filter(r => r !== id);
+  if (!envRows.length) {
+    const empty = document.getElementById('envEmptyState');
+    if (empty) empty.style.display = '';
+  }
+}
+function getEnvVars() {
+  const result = {};
+  envRows.forEach(id => {
+    const row = document.getElementById(id);
+    if (!row) return;
+    const inputs = row.querySelectorAll('input');
+    const k = inputs[0]?.value.trim(); const v = inputs[1]?.value;
+    if (k) result[k] = v;
+  });
+  return result;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// DEPLOYMENT TRIGGER
+// ══════════════════════════════════════════════════════════════════
+async function startDeployment() {
+  const name      = document.getElementById('deployProjectName').value.trim();
+  const subdomain = document.getElementById('deploySubdomain').value.trim().toLowerCase();
+  const repoUrl   = document.getElementById('deployRepoUrl').value.trim();
+  const branch    = document.getElementById('deployBranch').value.trim() || 'main';
+  const installCmd= document.getElementById('deployInstallCmd').value.trim() || 'npm install';
+  const buildCmd  = document.getElementById('deployBuildCmd').value.trim()   || 'npm run build';
+  const startCmd  = document.getElementById('deployStartCmd')?.value.trim() || '';
+  const outputDir = document.getElementById('deployOutputDir').value.trim()  || 'dist';
+  const nodeVer   = document.getElementById('deployNodeVersion').value       || '18';
+  const envVars   = getEnvVars();
+
+  if (!name)      { toast('Project name is required', 'error'); return; }
+  if (!subdomain) { toast('Subdomain is required', 'error'); return; }
+  if (!repoUrl)   { toast('GitHub repository URL is required', 'error'); return; }
+  if (!/^https?:\/\/(www\.)?github\.com\/.+\/.+/.test(repoUrl)) {
+    toast('Please enter a valid GitHub repository URL', 'error'); return;
+  }
+
+  // Create or update project
+  let project = projects.find(p => p.subdomain === subdomain);
+  if (!project) {
+    project = { id: genId(), name, subdomain, repoUrl, branch, installCmd, buildCmd, startCmd, outputDir, nodeVer, createdAt: new Date().toISOString() };
+    projects.push(project);
+  } else {
+    Object.assign(project, { name, repoUrl, branch, installCmd, buildCmd, startCmd, outputDir, nodeVer });
+  }
+
+  // Create deployment record
+  const deployment = {
+    id: genId(), projectId: project.id, projectName: name,
+    branch, status: 'building', startedAt: new Date().toISOString(),
+    logs: [], envVarsCount: Object.keys(envVars).length
+  };
+  deployments.push(deployment);
+  activeBuildId = deployment.id;
+  save();
+
+  // Update UI counters
+  document.getElementById('projectsCount').textContent  = projects.length;
+  document.getElementById('deploymentsCount').textContent = deployments.length;
+
+  const btn = document.getElementById('deployBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<svg style="width:14px;height:14px;animation:dpSpin 0.7s linear infinite;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Deploying…';
+
+  // Navigate to logs
+  showPage('logs');
+  toast('Build started for ' + name, 'info');
+
+  // Call API
+  try {
+    const res = await fetch(API + '/api/deploy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: project.id, name, subdomain, repoUrl, branch, installCmd, buildCmd, startCmd, outputDir, nodeVer, envVars })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      markDeployFailed(deployment.id, data.error || 'API error');
+      toast('Deployment failed: ' + (data.error || 'Unknown error'), 'error');
+    }
+  } catch(err) {
+    // API not reachable — simulate local feedback
+    simulateLocalBuild(deployment.id, project);
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg> Deploy Now';
+}
+
+function markDeployFailed(deployId, reason) {
+  const d = deployments.find(x => x.id === deployId);
+  if (d) { d.status = 'failed'; d.endedAt = new Date().toISOString(); save(); }
+}
+
+function simulateLocalBuild(deployId, project) {
+  // When server is not reachable, show a demo build in terminal
+  const d = deployments.find(x => x.id === deployId);
+  const lines = [
+    '\x1b[36m[DeployBoard]\x1b[0m Server not reachable — showing demo mode',
+    '\x1b[33mStart your server.js to enable real builds.\x1b[0m',
+    '',
+    '\x1b[32m$\x1b[0m git clone ' + (project.repoUrl || 'https://github.com/example/repo') + ' /tmp/build-' + deployId.slice(-6),
+    '\x1b[90mCloning into \'/tmp/build-' + deployId.slice(-6) + '\'...\x1b[0m',
+    '\x1b[32m$\x1b[0m ' + (project.installCmd || 'npm install'),
+    '\x1b[90madded 342 packages in 12s\x1b[0m',
+    '\x1b[32m$\x1b[0m ' + (project.buildCmd || 'npm run build'),
+    '\x1b[90m> vite build\x1b[0m',
+    '\x1b[90mvite v5.0.0 building for production...\x1b[0m',
+    '\x1b[32m✓ 1247 modules transformed.\x1b[0m',
+    '\x1b[32m✓ built in 3.21s\x1b[0m',
+    '',
+    '\x1b[33m[Demo] In real mode, files would be copied to /tmp/user-sites/' + project.subdomain + '/dist\x1b[0m',
+    '\x1b[32m[DeployBoard] Build complete (demo mode)\x1b[0m'
+  ];
+  if (d) d.logs = lines.slice();
+
+  // Navigate to logs page so user sees the output
+  showPage('logs');
+
+  let i = 0;
+  const interval = setInterval(() => {
+    if (i >= lines.length) {
+      clearInterval(interval);
+      if (d) { d.status = 'success'; d.duration = 18; d.endedAt = new Date().toISOString(); save(); }
+      const statusEl = document.getElementById('termStatus');
+      if (statusEl) statusEl.innerHTML = statusBadge('success');
+      setStep('step-cleanup','done');
+      renderDashboard();
+      toast('Demo build completed successfully', 'success');
+      return;
+    }
+    writeTerm(lines[i]);
+    if (d && d.logs) d.logs.push(lines[i]);
+    if (i === 3)  setStep('step-clone','active');
+    if (i === 5)  { setStep('step-clone','done'); setStep('step-install','active'); }
+    if (i === 7)  { setStep('step-install','done'); setStep('step-build','active'); }
+    if (i === 11) { setStep('step-build','done'); setStep('step-copy','active'); }
+    if (i === 13) { setStep('step-copy','done'); setStep('step-cleanup','active'); }
+    i++;
+  }, 220);
+}
+
+async function redeploy(projectId) {
+  const p = projects.find(x => x.id === projectId);
+  if (!p) return;
+  // pre-fill deploy form
+  document.getElementById('deployProjectName').value = p.name;
+  document.getElementById('deploySubdomain').value   = p.subdomain;
+  document.getElementById('deployRepoUrl').value     = p.repoUrl;
+  document.getElementById('deployBranch').value      = p.branch || 'main';
+  document.getElementById('deployInstallCmd').value  = p.installCmd || 'npm install';
+  document.getElementById('deployBuildCmd').value    = p.buildCmd   || 'npm run build';
+  if (document.getElementById('deployStartCmd')) document.getElementById('deployStartCmd').value = p.startCmd || '';
+  document.getElementById('deployOutputDir').value   = p.outputDir  || 'dist';
+  showPage('new-deploy');
+  toast('Form pre-filled for re-deployment', 'info');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TERMINAL (Xterm.js)
+// ══════════════════════════════════════════════════════════════════
+function initTerminal() {
+  if (term) { fitAddon && fitAddon.fit(); return; }
+  const el = document.getElementById('terminal');
+  if (!el) return;
+  const isMobile = window.innerWidth <= 768;
+  try {
+    term = new Terminal({
+      theme: {
+        background:'#000d1a', foreground:'#c8d3f5',
+        cursor:'#3b82f6', black:'#101820', brightBlack:'#475569',
+        red:'#ef4444', green:'#10b981', yellow:'#f59e0b',
+        blue:'#3b82f6', magenta:'#8b5cf6', cyan:'#06b6d4', white:'#cbd5e1'
+      },
+      fontFamily:"'JetBrains Mono', 'Fira Code', monospace",
+      fontSize: isMobile ? 11 : 13, lineHeight: 1.5,
+      cursorBlink: false, convertEol: true, scrollback: 5000,
+      disableStdin: true
+    });
+    fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(el);
+    setTimeout(() => { fitAddon && fitAddon.fit(); }, 100);
+
+    // Flush buffered lines that arrived before terminal was open
+    if (pendingTermLines.length) {
+      pendingTermLines.forEach(l => term.writeln(l));
+      pendingTermLines = [];
+    } else {
+      term.writeln('\x1b[36m[DeployBoard]\x1b[0m Terminal ready — waiting for build output.');
+      if (!socket || !socket.connected) {
+        term.writeln('\x1b[90mConnecting to build server…\x1b[0m');
+      }
+    }
+  } catch(e) {
+    console.warn('Xterm init error:', e);
+  }
+  window.addEventListener('resize', () => { if (fitAddon) setTimeout(() => fitAddon.fit(), 50); });
+}
+
+// Lines that arrive before the terminal DOM element is ready
+var pendingTermLines = [];
+
+function writeTerm(line) {
+  if (term) {
+    term.writeln(line);
+  } else {
+    pendingTermLines.push(line);
+    // Cap buffer at 2000 lines
+    if (pendingTermLines.length > 2000) pendingTermLines.shift();
+  }
+}
+
+function clearTerminal() {
+  if (term) term.clear();
+  logBuffer = [];
+  pendingTermLines = [];
+}
+
+function downloadLogs() {
+  const content = logBuffer.join('\n') || 'No logs captured.';
+  const blob = new Blob([content], { type: 'text/plain' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'build-' + (activeBuildId||'logs') + '.txt'; a.click();
+}
+
+function setStep(id, state) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'step-icon ' + state;
+  if (state === 'done')   el.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;"><polyline points="20 6 9 17 4 12"/></svg>';
+  if (state === 'active') el.innerHTML = '<svg style="width:13px;height:13px;animation:dpSpin 0.7s linear infinite;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>';
+  if (state === 'error')  el.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+}
+// Inject spin keyframe
+const spinStyle = document.createElement('style');
+spinStyle.textContent = '@keyframes dpSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}';
+document.head.appendChild(spinStyle);
+
+// ══════════════════════════════════════════════════════════════════
+// SOCKET.IO  —  starts immediately on page load (not waiting for logs tab)
+// ══════════════════════════════════════════════════════════════════
+function initSocket() {
+  if (socket) return;
+  if (typeof io === 'undefined') {
+    console.warn('[Socket.io] Could not initialise: io is not defined (CDN script may have failed to load)');
+    writeTerm('\x1b[33m[Socket.io]\x1b[0m Socket.io library not loaded. Live log streaming unavailable — make sure you have an internet connection.');
+    return;
+  }
+  try {
+    socket = io(API, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1500,
+      timeout: 8000
+    });
+
+    socket.on('connect', () => {
+      console.log('[Socket.io] Connected:', socket.id);
+      writeTerm('\x1b[32m[Socket.io]\x1b[0m Connected to build server \x1b[90m(' + socket.id + ')\x1b[0m');
+      const statusEl = document.getElementById('statusSocket');
+      if (statusEl) {
+        statusEl.className = 'badge badge-success';
+        statusEl.innerHTML = '<span class="badge-dot"></span>Connected';
+      }
+    });
+
+    socket.on('disconnect', (reason) => {
+      writeTerm('\x1b[33m[Socket.io]\x1b[0m Disconnected: ' + reason);
+      const statusEl = document.getElementById('statusSocket');
+      if (statusEl) {
+        statusEl.className = 'badge badge-error';
+        statusEl.innerHTML = '<span class="badge-dot"></span>Disconnected';
+      }
+    });
+
+    socket.on('connect_error', (err) => {
+      console.warn('[Socket.io] Connection error:', err.message);
+      const statusEl = document.getElementById('statusSocket');
+      if (statusEl) {
+        statusEl.className = 'badge badge-error';
+        statusEl.innerHTML = '<span class="badge-dot"></span>Offline';
+      }
+    });
+
+    // ── Build log line received ──────────────────────────────────
+    socket.on('build:log', ({ deployId, line }) => {
+      // Write to terminal immediately
+      writeTerm(line);
+      logBuffer.push(line);
+
+      // Save to in-memory deployment record
+      const d = deployments.find(x => x.id === deployId);
+      if (d) { d.logs = d.logs || []; d.logs.push(line); }
+
+      // If we're not already on logs page, auto-navigate there
+      if (currentPage !== 'logs') {
+        showPage('logs');
+      }
+
+      // Update the title bar with active deploy ID
+      const titleEl = document.getElementById('termTitle');
+      if (titleEl && activeBuildId) {
+        const dep = deployments.find(x => x.id === activeBuildId);
+        titleEl.textContent = (dep ? dep.projectName + ' · ' : '') + activeBuildId.slice(-8);
+      }
+      // Show building status
+      const statusEl = document.getElementById('termStatus');
+      if (statusEl) {
+        statusEl.innerHTML = statusBadge('building');
+      }
+    });
+
+    // ── Build step state changed ─────────────────────────────────
+    socket.on('build:step', ({ deployId, step }) => {
+      const stepMap = {
+        clone:   'step-clone',
+        install: 'step-install',
+        build:   'step-build',
+        copy:    'step-copy',
+        cleanup: 'step-cleanup'
+      };
+      if (stepMap[step.id]) setStep(stepMap[step.id], step.state);
+    });
+
+    // ── Build finished ───────────────────────────────────────────
+    socket.on('build:done', ({ deployId, status, duration, liveUrl }) => {
+      const d = deployments.find(x => x.id === deployId);
+      if (d) {
+        d.status   = status;
+        d.duration = duration;
+        d.endedAt  = new Date().toISOString();
+        if (liveUrl) d.liveUrl = liveUrl;
+        save();
+      }
+
+      const statusEl = document.getElementById('termStatus');
+      if (statusEl) statusEl.innerHTML = statusBadge(status);
+
+      if (status === 'success') {
+        toast('Build succeeded in ' + duration + 's!', 'success');
+        if (liveUrl) {
+          writeTerm('');
+          writeTerm('\x1b[32m┌─────────────────────────────────────────┐\x1b[0m');
+          writeTerm('\x1b[32m│  ✓  Site is live!                       │\x1b[0m');
+          writeTerm('\x1b[32m│  ' + liveUrl.padEnd(41) + '│\x1b[0m');
+          writeTerm('\x1b[32m└─────────────────────────────────────────┘\x1b[0m');
+        }
+      } else {
+        toast('Build failed after ' + duration + 's — check the logs for details', 'error', 6000);
+      }
+
+      renderDashboard();
+    });
+
+  } catch(e) {
+    console.warn('[Socket.io] Could not initialise:', e.message);
+    writeTerm('\x1b[33m[Socket.io]\x1b[0m Could not connect to build server. Make sure server.js is running.');
+  }
+}
+
+// Start socket immediately when page loads
+// window.onload fires after ALL scripts (including CDN) have loaded
+// This prevents the "io is not defined" error
+window.onload = function() {
+  initSocket();
+};
+
+// ══════════════════════════════════════════════════════════════════
+// ENV MANAGER
+// ══════════════════════════════════════════════════════════════════
+function renderEnvManager() {
+  const sel = document.getElementById('envProjectSelect');
+  sel.innerHTML = '<option value="">— Choose a project —</option>' +
+    projects.map(p => `<option value="${p.id}">${escHtml(p.name)}</option>`).join('');
+}
+function loadEnvForProject() {
+  const projectId = document.getElementById('envProjectSelect').value;
+  const display   = document.getElementById('envVarsDisplay');
+  if (!projectId) {
+    display.innerHTML = '<div class="empty-state" style="padding:30px 0;"><div style="font-size:0.82rem;color:var(--text-3);">Select a project.</div></div>';
+    return;
+  }
+  const vars = envStore[projectId] || {};
+  const keys = Object.keys(vars);
+  if (!keys.length) {
+    display.innerHTML = '<div style="font-size:0.82rem;color:var(--text-3);padding:16px 0;">No environment variables set for this project.</div>';
+    return;
+  }
+  display.innerHTML = keys.map(k => `
+    <div class="env-row">
+      <input class="input input-mono" value="${escHtml(k)}" readonly>
+      <input class="input input-mono" value="${escHtml(vars[k])}" type="password" readonly
+        onfocus="this.type='text'" onblur="this.type='password'">
+      <button class="btn btn-icon btn-ghost" onclick="deleteEnvVar('${projectId}','${k}')">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>`).join('');
+}
+function saveEnvVar() {
+  const projectId = document.getElementById('envProjectSelect').value;
+  const k = document.getElementById('envKey').value.trim();
+  const v = document.getElementById('envVal').value;
+  if (!projectId) { toast('Select a project first', 'error'); return; }
+  if (!k)         { toast('Variable name required', 'error'); return; }
+  envStore[projectId] = envStore[projectId] || {};
+  envStore[projectId][k] = v;
+  save(); loadEnvForProject();
+  document.getElementById('envKey').value = '';
+  document.getElementById('envVal').value = '';
+  toast('Variable saved', 'success');
+}
+function deleteEnvVar(projectId, key) {
+  if (envStore[projectId]) { delete envStore[projectId][key]; save(); loadEnvForProject(); }
+  toast('Variable removed', 'info');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PROJECT DETAIL
+// ══════════════════════════════════════════════════════════════════
+function showProjectDetail(projectId) {
+  const p = projects.find(x => x.id === projectId);
+  if (!p) return;
+  const deploys = deployments.filter(d => d.projectId === projectId).reverse().slice(0, 10);
+  document.getElementById('projectDetailContent').innerHTML = `
+    <div class="page-header page-header-row">
+      <div>
+        <div class="page-title">${escHtml(p.name)}</div>
+        <div class="page-subtitle td-mono">${escHtml(p.subdomain)}.${escHtml(settings.baseDomain||'deployboard.app')}</div>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-ghost" onclick="redeploy('${p.id}')">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Redeploy
+        </button>
+        <button class="btn btn-danger" onclick="openDeleteModal('${p.id}')">Delete</button>
+      </div>
+    </div>
+    <div class="two-col" style="align-items:start;">
+      <div class="card">
+        <div class="card-header"><div class="card-title">Configuration</div></div>
+        <div class="card-body" style="display:grid;gap:12px;">
+          <div style="display:flex;justify-content:space-between;font-size:0.83rem;">
+            <span style="color:var(--text-2);">Repository</span>
+            <a href="${escHtml(p.repoUrl)}" target="_blank" class="td-mono" style="color:var(--cyan);font-size:0.78rem;">${escHtml(p.repoUrl||'—')}</a>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.83rem;">
+            <span style="color:var(--text-2);">Branch</span>
+            <span class="td-mono">${escHtml(p.branch||'main')}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.83rem;">
+            <span style="color:var(--text-2);">Install</span>
+            <span class="td-mono">${escHtml(p.installCmd||'npm install')}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.83rem;">
+            <span style="color:var(--text-2);">Build</span>
+            <span class="td-mono">${escHtml(p.buildCmd||'npm run build')}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.83rem;">
+            <span style="color:var(--text-2);">Output Dir</span>
+            <span class="td-mono">${escHtml(p.outputDir||'dist')}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.83rem;">
+            <span style="color:var(--text-2);">Node.js</span>
+            <span style="color:var(--text);font-weight:600;">${escHtml(p.nodeVer||'18')}</span>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Deployment History</div></div>
+        <div class="table-wrap">
+          ${deploys.length ? `<table><thead><tr><th>Status</th><th>Duration</th><th>When</th><th></th></tr></thead><tbody>` +
+            deploys.map(d => `<tr>
+              <td>${statusBadge(d.status)}</td>
+              <td>${d.duration ? d.duration+'s' : '—'}</td>
+              <td>${relTime(d.startedAt)}</td>
+              <td><button class="btn btn-ghost btn-sm" onclick="viewDeployLogs('${d.id}')">Logs</button></td>
+            </tr>`).join('') + '</tbody></table>'
+          : '<div class="empty-state" style="padding:24px;"><div style="font-size:0.82rem;color:var(--text-3);">No deployments yet.</div></div>'}
+        </div>
+      </div>
+    </div>`;
+  showPage('project-detail');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════════════════════════════════
+function loadSettingsUI() {
+  if (settings.platformName)  document.getElementById('settingsPlatformName').value = settings.platformName;
+  if (settings.runnerMode)    document.getElementById('settingsRunnerMode').value    = settings.runnerMode;
+  if (settings.sitesDir)      document.getElementById('settingsSitesDir').value      = settings.sitesDir;
+  if (settings.tmpDir)        document.getElementById('settingsTmpDir').value        = settings.tmpDir;
+  if (settings.baseDomain)    document.getElementById('settingsBaseDomain').value    = settings.baseDomain;
+  if (settings.ghUser)        document.getElementById('settingsGhUser').value        = settings.ghUser;
+  if (settings.name)          document.getElementById('settingsName').value          = settings.name;
+  if (settings.email)         document.getElementById('settingsEmail').value         = settings.email;
+  checkSystemStatus();
+}
+function switchSettingsTab(tab, el) {
+  ['general','github','domain','account'].forEach(t => {
+    const p = document.getElementById('settingsTab' + t.charAt(0).toUpperCase() + t.slice(1));
+    if (p) p.style.display = t === tab ? '' : 'none';
+  });
+  document.querySelectorAll('#settingsTabs .tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+}
+function saveSettings() {
+  settings.platformName = document.getElementById('settingsPlatformName').value;
+  settings.runnerMode   = document.getElementById('settingsRunnerMode').value;
+  settings.sitesDir     = document.getElementById('settingsSitesDir').value;
+  settings.tmpDir       = document.getElementById('settingsTmpDir').value;
+  save(); toast('Settings saved', 'success');
+}
+function saveGithubSettings() {
+  settings.ghUser = document.getElementById('settingsGhUser').value;
+  // Token not stored in localStorage for security — should go to server env
+  save(); toast('GitHub settings saved. Token must be set as GITHUB_TOKEN env var on server.', 'info', 5000);
+}
+function saveDomainSettings() {
+  settings.baseDomain = document.getElementById('settingsBaseDomain').value.trim();
+  save(); toast('Domain settings saved', 'success');
+  updateNginxConfig();
+}
+function saveAccountSettings() {
+  settings.name  = document.getElementById('settingsName').value;
+  settings.email = document.getElementById('settingsEmail').value;
+  save();
+  const name = settings.name || settings.email || 'JG';
+  const initials = name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) || 'JG';
+  document.getElementById('sidebarAvatar').textContent  = initials;
+  document.getElementById('topbarAvatar').textContent   = initials;
+  document.getElementById('sidebarName').textContent    = settings.name || 'User';
+  toast('Account updated', 'success');
+}
+function updateNginxConfig() {
+  const base = settings.baseDomain || 'deployboard.app';
+  const el   = document.getElementById('nginxConfigPreview');
+  if (el) el.innerHTML = `<span class="ck">server</span> {
+  <span class="ck">listen</span> <span class="cn">80</span>;
+  <span class="ck">server_name</span> ~<span class="cs">^(?&lt;subdomain&gt;.+)\\.${escHtml(base)}$</span>;
+  
+  <span class="ck">location</span> / {
+    <span class="ck">root</span> <span class="cs">/var/www/user-sites/$subdomain/dist</span>;
+    <span class="ck">index</span> index.html;
+    <span class="ck">try_files</span> $uri $uri/ /index.html;
+  }
+}`;
+}
+function copyNginxConfig() {
+  const el = document.getElementById('nginxConfigPreview');
+  if (!el) return;
+  navigator.clipboard.writeText(el.innerText).then(() => toast('Nginx config copied!', 'success'));
+}
+async function checkSystemStatus() {
+  // Check API
+  try {
+    const r = await fetch(API + '/api/health', { signal: AbortSignal.timeout(3000) });
+    const online = r.ok;
+    document.getElementById('statusApi').className = online ? 'badge badge-success' : 'badge badge-error';
+    document.getElementById('statusApi').innerHTML = '<span class="badge-dot"></span>' + (online ? 'Online' : 'Offline');
+    document.getElementById('statusDb').className  = online ? 'badge badge-success' : 'badge badge-error';
+    document.getElementById('statusDb').innerHTML  = '<span class="badge-dot"></span>' + (online ? 'Connected' : 'Offline');
+  } catch(e) {
+    ['statusApi','statusDb'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.className = 'badge badge-error'; el.innerHTML = '<span class="badge-dot"></span>Offline'; }
+    });
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// DELETE MODAL
+// ══════════════════════════════════════════════════════════════════
+function openDeleteModal(projectId) {
+  pendingDelete = projectId;
+  const p = projects.find(x => x.id === projectId);
+  document.getElementById('deleteModalMsg').textContent = p
+    ? `Are you sure you want to delete "${p.name}" and all its deployment history?`
+    : 'This action cannot be undone.';
+  document.getElementById('deleteModal').classList.add('open');
+}
+function closeDeleteModal() {
+  document.getElementById('deleteModal').classList.remove('open');
+  pendingDelete = null;
+}
+function confirmDelete() {
+  if (!pendingDelete) return;
+  projects    = projects.filter(p => p.id !== pendingDelete);
+  deployments = deployments.filter(d => d.projectId !== pendingDelete);
+  delete envStore[pendingDelete];
+  save(); closeDeleteModal();
+  renderProjects(); renderDashboard();
+  toast('Project deleted', 'info');
+  if (currentPage === 'project-detail') showPage('projects');
+}
+function confirmDeleteAllProjects() {
+  if (!confirm('Delete ALL projects and deployments? This cannot be undone.')) return;
+  projects = []; deployments = []; envStore = {};
+  save(); renderProjects(); renderDashboard();
+  toast('All projects deleted', 'info');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════════════
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function relTime(iso) {
+  if (!iso) return '—';
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60000)  return 'just now';
+  if (diff < 3600000)return Math.floor(diff/60000) + 'm ago';
+  if (diff < 86400000)return Math.floor(diff/3600000) + 'h ago';
+  return Math.floor(diff/86400000) + 'd ago';
+}
+function statusBadge(status) {
+  const map = {
+    success: 'badge-success', failed: 'badge-error',
+    building: 'badge-building', pending: 'badge-pending'
+  };
+  const cls = map[status] || 'badge-idle';
+  return `<span class="badge ${cls}"><span class="badge-dot"></span>${status||'unknown'}</span>`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════════
+(function() {
+  renderDashboard();
+  // Load saved user info
+  if (settings.name) {
+    const initials = settings.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) || 'JG';
+    document.getElementById('sidebarAvatar').textContent = initials;
+    document.getElementById('topbarAvatar').textContent  = initials;
+    document.getElementById('sidebarName').textContent   = settings.name;
+  }
+  // Kick off health check silently
+  fetch(API + '/api/health', { signal: AbortSignal.timeout(2000) }).catch(()=>{});
+})();
+// ══════════════════════════════════════════════════════════════════
+// VIEW SWITCHING — landing ↔ dashboard
+// ══════════════════════════════════════════════════════════════════
+function showDashboard() {
+  document.documentElement.classList.add('app-mode');
+  document.getElementById('landing-view').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  if (!window._dashboardInited) {
+    window._dashboardInited = true;
+    renderDashboard();
+    fetch(API + '/api/health', { signal: AbortSignal.timeout(2000) }).catch(()=>{});
+  }
+  // Ensure socket is running (only if io library loaded)
+  if (typeof io !== 'undefined' && (!socket || !socket.connected)) initSocket();
+}
+
+function showLanding() {
+  document.documentElement.classList.remove('app-mode');
+  document.getElementById('landing-view').style.display = 'block';
+  document.getElementById('app').style.display = 'none';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
+</body>
+</html>

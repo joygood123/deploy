@@ -1,0 +1,48 @@
+# ── DeployBoard Environment Variables ──────────────────────────────
+# Copy this file to .env and fill in your values
+
+# Server port (Render sets this automatically — leave blank)
+PORT=3001
+
+# Build runner mode:
+#   local  = child_process on the host (works on Render free tier)
+#   docker = isolated Docker containers (requires VPS)
+RUNNER=local
+
+# Where built sites are served from
+# Use /tmp on Render (ephemeral) or a persistent path on VPS
+SITES_DIR=/tmp/user-sites
+
+# Temporary directory for cloning repos — deleted after each build
+TMP_DIR=/tmp/deployboard-builds
+
+# MongoDB (get a free cluster at mongodb.com/atlas)
+MONGODB_URI=mongodb+srv://USER:PASS@cluster.mongodb.net/deployboard
+
+# GitHub Personal Access Token (for cloning private repos)
+# github.com → Settings → Developer settings → Personal access tokens → Classic
+# Scopes needed: repo
+GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxx
+
+# ── Cloudflare (same credentials as your Treetrodactly site) ──────
+
+# Your existing domain where user sites are hosted
+BASE_DOMAIN=joytreehostingserver.dpdns.org
+
+# WILDCARD MODE (default: true)
+# Since you have a wildcard A record (* → 35.205.83.73) in Cloudflare,
+# DeployBoard does NOT need to create individual DNS records for each site.
+# The wildcard covers every subdomain automatically.
+# Set to "false" only if you remove the wildcard and want per-subdomain records.
+CF_WILDCARD_MODE=true
+
+# Cloudflare API Token — only needed if CF_WILDCARD_MODE=false
+# (cloudflare.com → My Profile → API Tokens → Create Token → Edit zone DNS)
+CF_API_TOKEN=
+
+# Zone ID — only needed if CF_WILDCARD_MODE=false
+CF_ZONE_ID=
+
+# These are only needed if you use a Cloudflare Tunnel (not required with wildcard)
+CF_TUNNEL_ID=
+CF_ACCOUNT_ID=

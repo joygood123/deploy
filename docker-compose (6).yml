@@ -1,0 +1,61 @@
+services:
+  # ── DeployBoard Orchestrator ──────────────────────────────────────────────
+  app:
+    build: .
+    container_name: deployboard
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+      # Node.js user apps get ports 4000-4099
+      - "4000-4099:4000-4099"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - RUNNER=local
+      - MONGODB_URI=mongodb://mongo:27017/deployboard
+      - SITES_DIR=/var/www/user-sites
+      - TMP_DIR=/tmp/deployboard-builds
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - BASE_DOMAIN=${BASE_DOMAIN:-joytreehostingserver.dpdns.org}
+      - CF_WILDCARD_MODE=${CF_WILDCARD_MODE:-true}
+      - CF_API_TOKEN=${CF_API_TOKEN:-}
+      - CF_ZONE_ID=${CF_ZONE_ID:-}
+      - CF_TUNNEL_ID=${CF_TUNNEL_ID:-}
+      - CF_ACCOUNT_ID=${CF_ACCOUNT_ID:-}
+    volumes:
+      - sites-data:/var/www/user-sites
+      - /tmp/deployboard-builds:/tmp/deployboard-builds
+      # Nginx app configs written here, then VM nginx includes them
+      - /etc/nginx/conf.d/deployboard-apps:/etc/nginx/conf.d/deployboard-apps
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - deployboard-net
+
+  # ── MongoDB ───────────────────────────────────────────────────────────────
+  mongo:
+    image: mongo:7-jammy
+    container_name: deployboard-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - deployboard-net
+
+  # NOTE: NO nginx service here — we use the VM's system nginx instead.
+  # The VM nginx at /etc/nginx/conf.d/deployboard.conf proxies to this app at port 3001.
+  # This avoids port 80 conflicts between Docker nginx and VM nginx.
+
+volumes:
+  sites-data:
+  mongo-data:
+
+networks:
+  deployboard-net:
+    driver: bridge
